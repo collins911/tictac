@@ -1,0 +1,845 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TicTac Cash</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --green: #00ff88;
+            --green-dim: #00cc6a;
+            --green-glow: rgba(0, 255, 136, 0.25);
+            --red: #ff4560;
+            --gold: #ffd700;
+            --bg: #0a0a0a;
+            --surface: #111111;
+            --surface2: #1a1a1a;
+            --border: rgba(0, 255, 136, 0.2);
+            --text: #e8e8e8;
+            --muted: #666;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'DM Mono', monospace;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            overflow-x: hidden;
+        }
+
+        /* ── BACKGROUND GRID ── */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(0,255,136,0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0,255,136,0.03) 1px, transparent 1px);
+            background-size: 40px 40px;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .screen {
+            position: relative;
+            z-index: 1;
+            width: 100%;
+            max-width: 460px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .hidden { display: none !important; }
+
+        /* ── LOGO ── */
+        .logo {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 4rem;
+            letter-spacing: 6px;
+            color: var(--green);
+            text-shadow: 0 0 30px var(--green-glow), 0 0 60px rgba(0,255,136,0.1);
+            line-height: 1;
+        }
+        .logo span { color: var(--text); }
+        .tagline {
+            font-size: 0.7rem;
+            letter-spacing: 4px;
+            color: var(--muted);
+            text-transform: uppercase;
+            margin-top: -12px;
+        }
+
+        /* ── CARDS ── */
+        .card {
+            width: 100%;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 24px;
+        }
+
+        /* ── INPUTS ── */
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            width: 100%;
+        }
+        .input-group label {
+            font-size: 0.65rem;
+            letter-spacing: 3px;
+            color: var(--muted);
+            text-transform: uppercase;
+        }
+        input {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 14px 16px;
+            color: var(--green);
+            font-family: 'DM Mono', monospace;
+            font-size: 1rem;
+            width: 100%;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            outline: none;
+        }
+        input:focus {
+            border-color: var(--green);
+            box-shadow: 0 0 0 3px var(--green-glow);
+        }
+        input.error { border-color: var(--red); }
+
+        /* ── BUTTONS ── */
+        .btn {
+            width: 100%;
+            padding: 16px;
+            border: none;
+            border-radius: 10px;
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 1.2rem;
+            letter-spacing: 3px;
+            cursor: pointer;
+            transition: transform 0.15s, box-shadow 0.15s, opacity 0.2s;
+        }
+        .btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+        }
+        .btn:active:not(:disabled) { transform: translateY(0); }
+        .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+        .btn-primary {
+            background: var(--green);
+            color: #000;
+            box-shadow: 0 0 20px var(--green-glow);
+        }
+        .btn-primary:hover:not(:disabled) { box-shadow: 0 0 30px var(--green-glow); }
+
+        .btn-outline {
+            background: transparent;
+            color: var(--green);
+            border: 1px solid var(--border);
+        }
+        .btn-outline:hover:not(:disabled) {
+            border-color: var(--green);
+            background: rgba(0,255,136,0.05);
+        }
+
+        .btn-danger {
+            background: transparent;
+            color: var(--red);
+            border: 1px solid rgba(255,69,96,0.3);
+            font-size: 0.85rem;
+            padding: 10px;
+            letter-spacing: 2px;
+        }
+
+        /* ── WALLET ── */
+        .wallet-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        .wallet-label {
+            font-size: 0.6rem;
+            letter-spacing: 3px;
+            color: var(--muted);
+            text-transform: uppercase;
+        }
+        .wallet-phone {
+            font-size: 0.65rem;
+            color: var(--muted);
+        }
+        #balance {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 2.8rem;
+            color: var(--green);
+            text-shadow: 0 0 20px var(--green-glow);
+            letter-spacing: 2px;
+            transition: color 0.3s;
+        }
+        #balance.credit { color: var(--gold); }
+
+        /* ── STATUS BAR ── */
+        #status {
+            width: 100%;
+            padding: 12px 16px;
+            border-radius: 10px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            font-size: 0.75rem;
+            letter-spacing: 2px;
+            color: var(--muted);
+            text-align: center;
+            text-transform: uppercase;
+            min-height: 46px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s;
+        }
+        #status.active { color: var(--green); border-color: var(--green); }
+        #status.warn { color: var(--gold); border-color: rgba(255,215,0,0.3); }
+        #status.error { color: var(--red); border-color: rgba(255,69,96,0.3); }
+
+        /* ── BOARD ── */
+        .board-wrap {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            width: 100%;
+        }
+        .turn-indicators {
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            padding: 0 4px;
+        }
+        .player-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            border-radius: 8px;
+            border: 1px solid transparent;
+            font-size: 0.65rem;
+            letter-spacing: 2px;
+            color: var(--muted);
+            transition: all 0.3s;
+        }
+        .player-indicator.active-turn {
+            border-color: var(--green);
+            color: var(--green);
+            background: rgba(0,255,136,0.05);
+        }
+        .player-indicator .symbol {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 1.2rem;
+        }
+        .player-indicator.x-side .symbol { color: var(--green); }
+        .player-indicator.o-side .symbol { color: var(--red); }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            width: 100%;
+            max-width: 340px;
+        }
+        .cell {
+            aspect-ratio: 1;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 3rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: background 0.15s, border-color 0.15s, transform 0.1s;
+            color: var(--text);
+            user-select: none;
+        }
+        .cell:hover.clickable { background: var(--surface2); border-color: rgba(0,255,136,0.5); }
+        .cell.x { color: var(--green); }
+        .cell.o { color: var(--red); }
+        .cell.win-cell { background: rgba(0,255,136,0.1); border-color: var(--green); animation: pulse-win 1s ease infinite; }
+        .cell.o.win-cell { background: rgba(255,69,96,0.1); border-color: var(--red); }
+
+        @keyframes pulse-win {
+            0%, 100% { box-shadow: 0 0 0 0 transparent; }
+            50% { box-shadow: 0 0 20px var(--green-glow); }
+        }
+
+        /* ── OVERLAY ── */
+        .overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.85);
+            backdrop-filter: blur(6px);
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .overlay-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 36px 28px;
+            text-align: center;
+            max-width: 340px;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        .overlay-icon {
+            font-size: 4rem;
+            line-height: 1;
+        }
+        .overlay-title {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 2.2rem;
+            letter-spacing: 4px;
+        }
+        .overlay-sub {
+            font-size: 0.7rem;
+            letter-spacing: 2px;
+            color: var(--muted);
+        }
+
+        /* ── DEPOSIT MODAL ── */
+        .modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.85);
+            backdrop-filter: blur(6px);
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .modal-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 28px;
+            width: 100%;
+            max-width: 340px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        .modal-title {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 1.5rem;
+            letter-spacing: 3px;
+            color: var(--green);
+        }
+        .modal-close {
+            position: absolute;
+            top: 12px;
+            right: 16px;
+            background: none;
+            border: none;
+            color: var(--muted);
+            font-size: 1.4rem;
+            cursor: pointer;
+        }
+
+        /* ── SEARCHING ANIMATION ── */
+        .searching-dots::after {
+            content: '';
+            animation: dots 1.5s infinite;
+        }
+        @keyframes dots {
+            0%   { content: ''; }
+            25%  { content: '.'; }
+            50%  { content: '..'; }
+            75%  { content: '...'; }
+        }
+
+        /* ── TOAST ── */
+        #toast {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%) translateY(80px);
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 12px 24px;
+            font-size: 0.75rem;
+            letter-spacing: 1px;
+            z-index: 200;
+            transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1);
+            white-space: nowrap;
+        }
+        #toast.show { transform: translateX(-50%) translateY(0); }
+        #toast.success { border-color: var(--green); color: var(--green); }
+        #toast.fail { border-color: var(--red); color: var(--red); }
+
+        /* ── SCROLLBAR ── */
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: var(--bg); }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+    </style>
+</head>
+<body>
+
+<!-- LOGIN SCREEN -->
+<div class="screen" id="login-screen">
+    <div class="logo">TicTac<span>Cash</span></div>
+    <p class="tagline">Play. Win. Cash Out.</p>
+
+    <div class="card">
+        <div class="input-group">
+            <label>M-Pesa Phone Number</label>
+            <input type="tel" id="phone-input" placeholder="2547XXXXXXXX" maxlength="15">
+        </div>
+        <br>
+        <button class="btn btn-primary" onclick="login()">Enter Arena</button>
+    </div>
+    <p style="font-size:0.6rem;color:var(--muted);text-align:center;letter-spacing:1px;">
+        Sandbox mode — use Safaricom test numbers
+    </p>
+</div>
+
+<!-- GAME SCREEN -->
+<div class="screen hidden" id="game-screen">
+    <!-- WALLET -->
+    <div class="card">
+        <div class="wallet-header">
+            <span class="wallet-label">Balance</span>
+            <span class="wallet-phone" id="wallet-phone"></span>
+        </div>
+        <div id="balance">KES 0.00</div>
+        <br>
+        <div style="display:flex;gap:10px;">
+            <button class="btn btn-outline" style="flex:1" onclick="showDepositModal()">⬆ Deposit</button>
+            <button class="btn btn-outline" style="flex:1;color:var(--gold);border-color:rgba(255,215,0,0.3)" onclick="showWithdrawModal()">⬇ Withdraw</button>
+        </div>
+    </div>
+
+    <!-- STATUS -->
+    <div id="status">Ready to play</div>
+
+    <!-- BOARD (hidden until match found) -->
+    <div class="board-wrap hidden" id="board-wrap">
+        <div class="turn-indicators">
+            <div class="player-indicator x-side" id="indicator-x">
+                <span class="symbol">X</span>
+                <span>YOU</span>
+            </div>
+            <div style="display:flex;align-items:center;font-size:0.6rem;color:var(--muted);letter-spacing:2px;">VS</div>
+            <div class="player-indicator o-side" id="indicator-o">
+                <span>OPP</span>
+                <span class="symbol">O</span>
+            </div>
+        </div>
+        <div class="grid" id="board"></div>
+    </div>
+
+    <!-- FIND MATCH -->
+    <button class="btn btn-primary" id="play-btn" onclick="findMatch()">
+        Search for Match — KES 50
+    </button>
+
+    <!-- LOGOUT -->
+    <button class="btn btn-danger" onclick="logout()">Disconnect</button>
+</div>
+
+<!-- WITHDRAW MODAL -->
+<div class="modal hidden" id="withdraw-modal">
+    <div class="modal-card" style="position:relative">
+        <div class="modal-title" style="color:var(--gold)">Withdraw Funds</div>
+        <div style="font-size:0.65rem;color:var(--muted);letter-spacing:1px;margin-top:-8px;">
+            Funds sent directly to your M-Pesa
+        </div>
+        <div class="input-group">
+            <label>Amount (KES)</label>
+            <input type="number" id="withdraw-amount" placeholder="Min KES 10" min="10">
+        </div>
+        <div id="withdraw-balance-hint" style="font-size:0.65rem;color:var(--muted);letter-spacing:1px;text-align:right;margin-top:-8px;"></div>
+        <button class="btn btn-primary" style="background:var(--gold);color:#000" onclick="submitWithdraw()">Withdraw to M-Pesa</button>
+        <button class="btn btn-outline" onclick="hideWithdrawModal()">Cancel</button>
+    </div>
+</div>
+
+<!-- DEPOSIT MODAL -->
+<div class="modal hidden" id="deposit-modal">
+    <div class="modal-card" style="position:relative">
+        <div class="modal-title">Deposit Funds</div>
+        <div class="input-group">
+            <label>Amount (KES)</label>
+            <input type="number" id="deposit-amount" placeholder="e.g. 100" min="10" max="100000">
+        </div>
+        <button class="btn btn-primary" onclick="submitDeposit()">Send STK Push</button>
+        <button class="btn btn-outline" onclick="hideDepositModal()">Cancel</button>
+    </div>
+</div>
+
+<!-- RESULT OVERLAY -->
+<div class="overlay hidden" id="result-overlay">
+    <div class="overlay-card">
+        <div class="overlay-icon" id="result-icon">🎮</div>
+        <div class="overlay-title" id="result-title">GAME OVER</div>
+        <div class="overlay-sub" id="result-sub"></div>
+        <button class="btn btn-primary" onclick="dismissResult()">Play Again</button>
+    </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<script>
+    const socket = io();
+    let myPhone = null;
+    let gameId = null;
+    let mySymbol = null; // 'X' or 'O'
+    let currentTurn = 'X';
+    let board = Array(9).fill(null);
+    let gameActive = false;
+
+    // ── DOM REFS ─────────────────────────────────────────────────────────
+
+    const $ = id => document.getElementById(id);
+    const loginScreen = $('login-screen');
+    const gameScreen  = $('game-screen');
+    const boardWrap   = $('board-wrap');
+    const playBtn     = $('play-btn');
+    const statusEl    = $('status');
+    const balanceEl   = $('balance');
+    const boardEl     = $('board');
+    const overlayEl   = $('result-overlay');
+
+    // ── INIT BOARD ───────────────────────────────────────────────────────
+
+    function initBoard() {
+        boardEl.innerHTML = '';
+        for (let i = 0; i < 9; i++) {
+            const cell = document.createElement('div');
+            cell.className = 'cell';
+            cell.dataset.index = i;
+            cell.addEventListener('click', () => makeMove(i));
+            boardEl.appendChild(cell);
+        }
+    }
+    initBoard();
+
+    // ── LOGIN / LOGOUT ────────────────────────────────────────────────────
+
+    function login() {
+        const raw = $('phone-input').value.trim();
+        if (!raw) return showToast('Enter your M-Pesa phone number', 'fail');
+        socket.emit('auth', { phone: raw });
+    }
+
+    function logout() {
+        socket.disconnect();
+        myPhone = null;
+        gameActive = false;
+        gameScreen.classList.add('hidden');
+        loginScreen.classList.remove('hidden');
+    }
+
+    // ── DEPOSIT ───────────────────────────────────────────────────────────
+
+    function showDepositModal() { $('deposit-modal').classList.remove('hidden'); }
+    function hideDepositModal() { $('deposit-modal').classList.add('hidden'); }
+
+    function showWithdrawModal() {
+        $('withdraw-balance-hint').textContent = `Available: ${balanceEl.textContent}`;
+        $('withdraw-modal').classList.remove('hidden');
+    }
+    function hideWithdrawModal() {
+        $('withdraw-modal').classList.add('hidden');
+        $('withdraw-amount').value = '';
+    }
+
+    async function submitWithdraw() {
+        const amount = parseInt($('withdraw-amount').value, 10);
+        if (!amount || amount < 10) return showToast('Minimum withdrawal is KES 10', 'fail');
+
+        const currentBal = parseFloat(balanceEl.textContent.replace('KES ', ''));
+        if (amount > currentBal) return showToast('Insufficient balance', 'fail');
+
+        try {
+            const res = await fetch('/mpesa/withdraw', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ phone: myPhone, amount }),
+            });
+            const data = await res.json();
+            if (res.ok) {
+                showToast(data.msg, 'success');
+                hideWithdrawModal();
+                // Optimistically update balance
+                updateBalance((currentBal - amount).toFixed(2));
+            } else {
+                showToast(data.error || 'Withdrawal failed', 'fail');
+            }
+        } catch {
+            showToast('Network error. Try again.', 'fail');
+        }
+    }
+
+    async function submitDeposit() {
+        const amount = parseInt($('deposit-amount').value, 10);
+        if (!amount || amount < 10) return showToast('Minimum deposit is KES 10', 'fail');
+
+        try {
+            const res = await fetch('/mpesa/deposit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ phone: myPhone, amount }),
+            });
+            const data = await res.json();
+            if (res.ok) {
+                showToast(data.msg, 'success');
+                hideDepositModal();
+            } else {
+                showToast(data.error || 'Deposit failed', 'fail');
+            }
+        } catch {
+            showToast('Network error. Try again.', 'fail');
+        }
+    }
+
+    // ── MATCHMAKING ───────────────────────────────────────────────────────
+
+    function findMatch() {
+        if (!myPhone) return showToast('Not authenticated', 'fail');
+        playBtn.disabled = true;
+        setStatus('Searching for opponent', 'active', true);
+        socket.emit('find_match');
+    }
+
+    // ── MOVES ─────────────────────────────────────────────────────────────
+
+    function makeMove(index) {
+        if (!gameActive) return;
+        if (currentTurn !== mySymbol) return;
+        if (board[index]) return;
+        socket.emit('make_move', { gameId, index });
+    }
+
+    function applyMove(index, symbol) {
+        board[index] = symbol;
+        const cell = boardEl.children[index];
+        cell.textContent = symbol;
+        cell.className = `cell ${symbol.toLowerCase()}`;
+        cell.classList.remove('clickable');
+    }
+
+    function updateTurnIndicators() {
+        $('indicator-x').classList.toggle('active-turn', currentTurn === 'X');
+        $('indicator-o').classList.toggle('active-turn', currentTurn === 'O');
+
+        if (!gameActive) return;
+        if (currentTurn === mySymbol) {
+            setStatus('Your turn', 'active');
+            // Make empty cells clickable
+            [...boardEl.children].forEach((c, i) => {
+                if (!board[i]) c.classList.add('clickable');
+            });
+        } else {
+            setStatus("Opponent's turn...", '');
+            [...boardEl.children].forEach(c => c.classList.remove('clickable'));
+        }
+    }
+
+    function highlightWinCells(symbol) {
+        const wins = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+        const board = [...boardEl.children].map(c => c.textContent || null);
+        for (const [a,b,c] of wins) {
+            if (board[a] === symbol && board[b] === symbol && board[c] === symbol) {
+                [a,b,c].forEach(i => boardEl.children[i].classList.add('win-cell'));
+            }
+        }
+    }
+
+    // ── RESULT OVERLAY ────────────────────────────────────────────────────
+
+    function showResult(icon, title, sub) {
+        $('result-icon').textContent = icon;
+        $('result-title').textContent = title;
+        $('result-sub').textContent = sub;
+        overlayEl.classList.remove('hidden');
+    }
+
+    function dismissResult() {
+        overlayEl.classList.add('hidden');
+        resetGameState();
+    }
+
+    function resetGameState() {
+        gameId = null;
+        mySymbol = null;
+        gameActive = false;
+        board = Array(9).fill(null);
+        currentTurn = 'X';
+        initBoard();
+        boardWrap.classList.add('hidden');
+        playBtn.classList.remove('hidden');
+        playBtn.disabled = false;
+        $('indicator-x').classList.remove('active-turn');
+        $('indicator-o').classList.remove('active-turn');
+        setStatus('Ready to play', '');
+    }
+
+    // ── STATUS ────────────────────────────────────────────────────────────
+
+    function setStatus(msg, type = '', searching = false) {
+        statusEl.className = type ? `active ${type}` : '';
+        statusEl.innerHTML = searching
+            ? `<span class="searching-dots">${msg}</span>`
+            : msg;
+    }
+
+    // ── BALANCE ───────────────────────────────────────────────────────────
+
+    function updateBalance(value) {
+        const formatted = `KES ${parseFloat(value).toFixed(2)}`;
+        balanceEl.textContent = formatted;
+        balanceEl.classList.add('credit');
+        setTimeout(() => balanceEl.classList.remove('credit'), 600);
+    }
+
+    // ── TOAST ─────────────────────────────────────────────────────────────
+
+    let toastTimer;
+    function showToast(msg, type = '') {
+        const t = $('toast');
+        t.textContent = msg;
+        t.className = `show ${type}`;
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => { t.className = ''; }, 3000);
+    }
+
+    // ── SOCKET EVENTS ─────────────────────────────────────────────────────
+
+    socket.on('auth_success', ({ balance }) => {
+        myPhone = $('phone-input').value.trim();
+        $('wallet-phone').textContent = myPhone;
+        updateBalance(balance);
+        loginScreen.classList.add('hidden');
+        gameScreen.classList.remove('hidden');
+        setStatus('Ready to play', '');
+    });
+
+    socket.on('balance_update', ({ balance }) => {
+        updateBalance(balance);
+    });
+
+    socket.on('match_found', ({ gameId: gId, playerX, playerO }) => {
+        gameId = gId;
+        mySymbol = (socket.id === playerX) ? 'X' : 'O';
+        currentTurn = 'X';
+        board = Array(9).fill(null);
+        gameActive = true;
+
+        // Update indicators
+        if (mySymbol === 'X') {
+            $('indicator-x').querySelector('span:last-child').textContent = 'YOU';
+            $('indicator-o').querySelector('span:first-child').textContent = 'OPP';
+        } else {
+            $('indicator-x').querySelector('span:last-child').textContent = 'OPP';
+            $('indicator-o').querySelector('span:first-child').textContent = 'YOU';
+        }
+
+        initBoard();
+        boardWrap.classList.remove('hidden');
+        playBtn.classList.add('hidden');
+        updateTurnIndicators();
+    });
+
+    socket.on('move_made', ({ index, symbol, nextTurn }) => {
+        applyMove(index, symbol);
+        currentTurn = nextTurn;
+        updateTurnIndicators();
+    });
+
+    socket.on('game_finished', ({ result, winner, winnerSocketId, prize }) => {
+        gameActive = false;
+        [...boardEl.children].forEach(c => c.classList.remove('clickable'));
+
+        if (result === 'DRAW') {
+            highlightWinCells(null);
+            showResult('🤝', 'DRAW', 'KES 50 refunded to your wallet');
+            setStatus('Draw — entry fee refunded', 'warn');
+        } else if (result === 'FORFEIT') {
+            showResult('🏆', 'VICTORY', `Opponent disconnected — KES ${prize} credited`);
+            setStatus(`Opponent forfeited — KES ${prize} won`, 'active');
+        } else {
+            const iWon = winnerSocketId === socket.id;
+            if (iWon) {
+                highlightWinCells(winner);
+                showResult('💰', 'VICTORY!', `KES ${prize} has been added to your wallet`);
+                setStatus(`You won KES ${prize}!`, 'active');
+            } else {
+                highlightWinCells(winner);
+                showResult('❌', 'DEFEAT', 'Better luck next time');
+                setStatus('You lost this round', 'error');
+            }
+        }
+    });
+
+    socket.on('error_msg', msg => {
+        showToast(msg, 'fail');
+        // Re-enable play button if we were searching
+        if (!gameActive) {
+            playBtn.disabled = false;
+            setStatus('Ready to play', '');
+        }
+    });
+
+    socket.on('info_msg', msg => setStatus(msg, 'active', true));
+
+    socket.on('withdrawal_success', ({ amount }) => {
+        showToast(`KES ${amount} sent to your M-Pesa!`, 'success');
+    });
+
+    socket.on('withdrawal_failed', ({ reason }) => {
+        showToast(`Withdrawal failed: ${reason}`, 'fail');
+        // Balance already refunded by server — balance_update event will follow
+    });
+
+    socket.on('disconnect', () => {
+        if (gameActive) {
+            showToast('Connection lost', 'fail');
+            gameActive = false;
+        }
+    });
+
+    socket.on('connect', () => {
+        // Re-auth on reconnect if we have a phone
+        if (myPhone) socket.emit('auth', { phone: myPhone });
+    });
+
+    // Allow Enter key on login
+    $('phone-input').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
+    $('deposit-amount').addEventListener('keydown', e => { if (e.key === 'Enter') submitDeposit(); });
+    $('withdraw-amount').addEventListener('keydown', e => { if (e.key === 'Enter') submitWithdraw(); });
+</script>
+</body>
+</html>
