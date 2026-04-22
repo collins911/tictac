@@ -18,15 +18,18 @@ const io = new Server(server, {
 
 // ─── REDIS CLIENTS ────────────────────────────────────────────────────────
 if (!process.env.REDIS_URL) {
-    console.error('FATAL: REDIS_URL environment variable is not set. Check your Render environment settings.');
+    console.error('FATAL: REDIS_URL is not set.');
     process.exit(1);
 }
-
-const redisOpts = { url: process.env.REDIS_URL };
+// Force TLS — Render Redis requires rediss:// even if dashboard shows redis://
+const rawRedisUrl = process.env.REDIS_URL.replace(/^redis:\/\//, 'rediss://');
+const redisOpts = {
+    url: rawRedisUrl,
+    socket: { tls: true, rejectUnauthorized: false, keepAlive: 5000 },
+};
 const redis    = createClient(redisOpts);
 const redisPub = createClient(redisOpts);
 const redisSub = createClient(redisOpts);
-
 redis.on('error',    e => console.error('Redis error:',    e.message));
 redisPub.on('error', e => console.error('RedisPub error:', e.message));
 redisSub.on('error', e => console.error('RedisSub error:', e.message));
@@ -379,9 +382,8 @@ async function start() {
         // ── FIND MATCH ────────────────────────────────────────────────────
         socket.on('find_match', async () => {
             if (!socket.phone) return socket.emit('error_msg', 'Not authenticated.');
-            if (socket.searching) return; // prevent double click
+            if (socket.searching) return;
             socket.searching = true; // lock immediately to prevent race condition
-
             try {
             const deducted = await deductBalance(socket.phone, ENTRY_FEE);
             if (!deducted) {
