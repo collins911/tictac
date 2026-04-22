@@ -31,6 +31,10 @@ const games         = new Map();     // gameId -> game object
 const balances      = new Map();     // phone  -> balance (fallback if Redis down)
 const privateRooms  = new Map();     // roomCode -> { creator, createdAt, players }
 const userPins      = new Map();     // phone  -> hashed PIN (fallback)
+const userCreatedAt = new Map();     // phone  -> signup timestamp (fallback)
+
+// ─── ADMIN CONFIG ─────────────────────────────────────────────────────────
+const ADMIN_SECRET = process.env.ADMIN_SECRET || 'admin123'; // CHANGE THIS IN .env!
 
 // ─── SECURITY ────────────────────────────────────────────────────────────
 app.use(helmet({
@@ -53,7 +57,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 // ─── RATE LIMITING ────────────────────────────────────────────────────────
 const depositLimiter  = rateLimit({ windowMs: 60000, max: 5,  message: { error: 'Too many deposit attempts.' } });
 const withdrawLimiter = rateLimit({ windowMs: 60000, max: 3,  message: { error: 'Too many withdrawal attempts.' } });
-const authLimiter     = rateLimit({ windowMs: 60000, max: 10, message: { error: 'Too many login attempts.' } });
+const adminLimiter    = rateLimit({ windowMs: 60000, max: 10, message: { error: 'Too many admin requests.' } });
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────
 const ENTRY_FEE   = 50;
@@ -97,6 +101,15 @@ const generateRoomCode = () => {
     return crypto.randomBytes(3).toString('hex').toUpperCase();
 };
 
+// ─── ADMIN AUTH MIDDLEWARE ────────────────────────────────────────────────
+const adminAuth = (req, res, next) => {
+    const secret = req.headers['x-admin-secret'] || req.query.secret;
+    if (!secret || secret !== ADMIN_SECRET) {
+        return res.status(401).json({ error: 'Unauthorized. Invalid admin secret.' });
+    }
+    next();
+};
+
 // ─── PIN MANAGEMENT ───────────────────────────────────────────────────────
 const hashPin = async (pin) => {
     return await bcrypt.hash(pin, 10);
@@ -130,6 +143,25 @@ const setUserPin = async (phone, pin) => {
 const userExists = async (phone) => {
     const pin = await getUserPin(phone);
     return !!pin;
+};
+
+// ─── USER TIMESTAMP MANAGEMENT ────────────────────────────────────────────
+const setUserCreatedAt = async (phone) => {
+    const timestamp = Date.now();
+    userCreatedAt.set(phone, timestamp);
+    try {
+        if (redis.isReady) await redis.set(`user:${phone}:created_at`, timestamp);
+    } catch(e) {}
+};
+
+const getUserCreatedAt = async (phone) => {
+    try {
+        if (redis.isReady) {
+            const ts = await redis.get(`user:${phone}:created_at`);
+            return ts ? parseInt(ts) : null;
+        }
+    } catch(e) {}
+    return userCreatedAt.get(phone) || null;
 };
 
 // ─── BALANCE (Redis with in-memory fallback) ──────────────────────────────
@@ -214,6 +246,224 @@ setInterval(() => {
 
 // ─── HEALTH CHECK ─────────────────────────────────────────────────────────
 app.get('/health', (req, res) => res.json({ status: 'ok', ts: Date.now(), redis: redis.isReady }));
+
+// ─── PUBLIC STATS (NO AUTH REQUIRED) ──────────────────────────────────────
+app.get('/api/stats/public', async (req, res) => {
+    try {
+        let totalUsers = 0;
+        if (redis.isReady) {
+            const keys = await redis.keys('user:*:pin');
+            totalUsers = keys.length;
+        } else {
+            totalUsers = userPins.size;
+        }
+        
+        res.json({
+            status: 'ok',
+            totalUsers,
+            onlinePlayers: io.sockets.sockets.size,
+            activeGames: games.size,
+            waitingPlayers: waitingSocket ? 1 : 0
+        });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// ─── ADMIN API ENDPOINTS ──────────────────────────────────────────────────
+
+// Get comprehensive statistics
+app.get('/admin/stats', adminLimiter, adminAuth, async (req, res) => {
+    try {
+        let totalUsers = 0;
+        let totalBalance = 0;
+        let newUsersToday = 0;
+        let newUsersThisWeek = 0;
+        
+        const now = Date.now();
+        const oneDayAgo = now - 24 * 60 * 60 * 1000;
+        const oneWeekAgo = now - 7 * 24 * 60 * 60 * 1000;
+        
+        if (redis.isReady) {
+            const pinKeys = await redis.keys('user:*:pin');
+            totalUsers = pinKeys.length;
+            
+            for (const key of pinKeys) {
+                const phone = key.split(':')[1];
+                const bal = await getBalance(phone);
+                totalBalance += bal;
+                
+                const createdAt = await getUserCreatedAt(phone);
+                if (createdAt) {
+                    if (createdAt > oneDayAgo) newUsersToday++;
+                    if (createdAt > oneWeekAgo) newUsersThisWeek++;
+                }
+            }
+        } else {
+            totalUsers = userPins.size;
+            totalBalance = Array.from(balances.values()).reduce((a, b) => a + b, 0);
+            
+            for (const [phone, ts] of userCreatedAt.entries()) {
+                if (ts > oneDayAgo) newUsersToday++;
+                if (ts > oneWeekAgo) newUsersThisWeek++;
+            }
+        }
+        
+        // Get top players by balance
+        const topPlayers = [];
+        if (redis.isReady) {
+            const pinKeys = await redis.keys('user:*:pin');
+            const playersWithBalance = [];
+            for (const key of pinKeys) {
+                const phone = key.split(':')[1];
+                const bal = await getBalance(phone);
+                playersWithBalance.push({ phone, balance: bal });
+            }
+            playersWithBalance.sort((a, b) => b.balance - a.balance);
+            topPlayers.push(...playersWithBalance.slice(0, 10));
+        } else {
+            for (const [phone, bal] of balances.entries()) {
+                topPlayers.push({ phone, balance: bal });
+            }
+            topPlayers.sort((a, b) => b.balance - a.balance);
+        }
+        
+        res.json({
+            totalUsers,
+            totalBalance: totalBalance.toFixed(2),
+            newUsersToday,
+            newUsersThisWeek,
+            activeGames: games.size,
+            onlinePlayers: io.sockets.sockets.size,
+            waitingPlayers: waitingSocket ? 1 : 0,
+            privateRooms: privateRooms.size,
+            topPlayers: topPlayers.slice(0, 10),
+            timestamp: new Date().toISOString()
+        });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Get all users with details
+app.get('/admin/users', adminLimiter, adminAuth, async (req, res) => {
+    try {
+        const users = [];
+        
+        if (redis.isReady) {
+            const pinKeys = await redis.keys('user:*:pin');
+            
+            for (const key of pinKeys) {
+                const phone = key.split(':')[1];
+                const balance = await getBalance(phone);
+                const demoClaimed = await getDemoClaimed(phone);
+                const createdAt = await getUserCreatedAt(phone);
+                
+                users.push({
+                    phone,
+                    balance: balance.toFixed(2),
+                    demoClaimed: !!demoClaimed,
+                    createdAt: createdAt ? new Date(createdAt).toISOString() : null
+                });
+            }
+        } else {
+            for (const [phone] of userPins.entries()) {
+                const balance = balances.get(phone) || 0;
+                const createdAt = userCreatedAt.get(phone);
+                
+                users.push({
+                    phone,
+                    balance: balance.toFixed(2),
+                    demoClaimed: balances.has(phone),
+                    createdAt: createdAt ? new Date(createdAt).toISOString() : null
+                });
+            }
+        }
+        
+        // Sort by creation date (newest first) or phone
+        users.sort((a, b) => {
+            if (a.createdAt && b.createdAt) {
+                return b.createdAt.localeCompare(a.createdAt);
+            }
+            return a.phone.localeCompare(b.phone);
+        });
+        
+        res.json({
+            total: users.length,
+            users
+        });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Get recent signups (last 24 hours)
+app.get('/admin/recent-users', adminLimiter, adminAuth, async (req, res) => {
+    try {
+        const users = [];
+        const now = Date.now();
+        const oneDayAgo = now - 24 * 60 * 60 * 1000;
+        
+        if (redis.isReady) {
+            const pinKeys = await redis.keys('user:*:pin');
+            
+            for (const key of pinKeys) {
+                const phone = key.split(':')[1];
+                const createdAt = await getUserCreatedAt(phone);
+                
+                if (createdAt && createdAt > oneDayAgo) {
+                    const balance = await getBalance(phone);
+                    users.push({
+                        phone,
+                        balance: balance.toFixed(2),
+                        createdAt: new Date(createdAt).toISOString()
+                    });
+                }
+            }
+        } else {
+            for (const [phone, ts] of userCreatedAt.entries()) {
+                if (ts > oneDayAgo) {
+                    const balance = balances.get(phone) || 0;
+                    users.push({
+                        phone,
+                        balance: balance.toFixed(2),
+                        createdAt: new Date(ts).toISOString()
+                    });
+                }
+            }
+        }
+        
+        users.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+        
+        res.json({
+            total: users.length,
+            users
+        });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Get user count only
+app.get('/admin/count', adminLimiter, adminAuth, async (req, res) => {
+    try {
+        let totalUsers = 0;
+        
+        if (redis.isReady) {
+            const keys = await redis.keys('user:*:pin');
+            totalUsers = keys.length;
+        } else {
+            totalUsers = userPins.size;
+        }
+        
+        res.json({
+            totalUsers,
+            timestamp: new Date().toISOString()
+        });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
 
 // ─── GET ROOM INFO ────────────────────────────────────────────────────────
 app.get('/api/room/:code', (req, res) => {
@@ -337,6 +587,7 @@ io.on('connection', (socket) => {
         }
         
         await setUserPin(normalizedPhone, pin);
+        await setUserCreatedAt(normalizedPhone);
         
         // Give demo bonus
         await creditBalance(normalizedPhone, DEMO_BONUS);
