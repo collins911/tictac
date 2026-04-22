@@ -62,7 +62,6 @@
 
         .hidden { display: none !important; }
 
-        /* ── LOGO ── */
         .logo {
             font-family: 'Bebas Neue', sans-serif;
             font-size: 4rem;
@@ -80,7 +79,6 @@
             margin-top: -12px;
         }
 
-        /* ── DEMO BANNER ── */
         .demo-banner {
             width: 100%;
             background: rgba(255, 215, 0, 0.08);
@@ -94,7 +92,6 @@
             text-transform: uppercase;
         }
 
-        /* ── CARDS ── */
         .card {
             width: 100%;
             background: var(--surface);
@@ -103,7 +100,6 @@
             padding: 24px;
         }
 
-        /* ── INPUTS ── */
         .input-group {
             display: flex;
             flex-direction: column;
@@ -134,7 +130,6 @@
         }
         input.error { border-color: var(--red); }
 
-        /* ── BUTTONS ── */
         .btn {
             width: 100%;
             padding: 16px;
@@ -179,7 +174,6 @@
             letter-spacing: 2px;
         }
 
-        /* ── WALLET ── */
         .wallet-header {
             display: flex;
             justify-content: space-between;
@@ -206,7 +200,6 @@
         }
         #balance.credit { color: var(--gold); }
 
-        /* ── STATUS BAR ── */
         #status {
             width: 100%;
             padding: 12px 16px;
@@ -228,7 +221,6 @@
         #status.warn { color: var(--gold); border-color: rgba(255,215,0,0.3); }
         #status.error { color: var(--red); border-color: rgba(255,69,96,0.3); }
 
-        /* ── BOARD ── */
         .board-wrap {
             position: relative;
             display: flex;
@@ -300,7 +292,6 @@
             50% { box-shadow: 0 0 20px var(--green-glow); }
         }
 
-        /* ── OVERLAY ── */
         .overlay {
             position: fixed;
             inset: 0;
@@ -336,7 +327,6 @@
             color: var(--muted);
         }
 
-        /* ── MODAL ── */
         .modal {
             position: fixed;
             inset: 0;
@@ -376,7 +366,6 @@
             text-align: center;
         }
 
-        /* ── SEARCHING ANIMATION ── */
         .searching-dots::after {
             content: '';
             animation: dots 1.5s infinite;
@@ -388,7 +377,6 @@
             75%  { content: '...'; }
         }
 
-        /* ── TOAST ── */
         #toast {
             position: fixed;
             bottom: 24px;
@@ -409,7 +397,6 @@
         #toast.fail { border-color: var(--red); color: var(--red); }
         #toast.warn { border-color: var(--gold); color: var(--gold); }
 
-        /* ── SCROLLBAR ── */
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-track { background: var(--bg); }
         ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
@@ -429,7 +416,7 @@
     <div class="card">
         <div class="input-group">
             <label>Your Phone Number</label>
-            <input type="tel" id="phone-input" placeholder="2547XXXXXXXX" maxlength="15">
+            <input type="tel" id="phone-input" placeholder="2547XXXXXXXX" maxlength="15" value="254708374149">
         </div>
         <br>
         <button class="btn btn-primary" onclick="login()">Enter Arena</button>
@@ -442,12 +429,10 @@
 <!-- GAME SCREEN -->
 <div class="screen hidden" id="game-screen">
 
-    <!-- DEMO BANNER -->
     <div class="demo-banner" id="demo-banner">
         🎮 Demo Mode — Play money only. No real deposits or withdrawals.
     </div>
 
-    <!-- WALLET -->
     <div class="card">
         <div class="wallet-header">
             <span class="wallet-label">Demo Balance</span>
@@ -461,10 +446,8 @@
         </div>
     </div>
 
-    <!-- STATUS -->
     <div id="status">Ready to play</div>
 
-    <!-- BOARD (hidden until match found) -->
     <div class="board-wrap hidden" id="board-wrap">
         <div class="turn-indicators">
             <div class="player-indicator x-side" id="indicator-x">
@@ -480,13 +463,11 @@
         <div class="grid" id="board"></div>
     </div>
 
-    <!-- ONLINE COUNT -->
     <div id="online-bar" style="width:100%;display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;font-size:0.65rem;letter-spacing:2px;color:var(--muted);">
         <span>🟢 <span id="online-count">0</span> ONLINE</span>
         <span>🔍 <span id="searching-count">0</span> SEARCHING</span>
     </div>
 
-    <!-- FIND MATCH -->
     <button class="btn btn-primary" id="play-btn" onclick="findMatch()">
         Search for Match — KES 50
     </button>
@@ -495,7 +476,6 @@
         ✕ Cancel Search
     </button>
 
-    <!-- LOGOUT -->
     <button class="btn btn-danger" onclick="logout()">Disconnect</button>
 </div>
 
@@ -554,7 +534,11 @@
     let board = Array(9).fill(null);
     let gameActive = false;
 
-    // ── DOM REFS ──────────────────────────────────────────────────────────
+    // DEBUG: Log socket connection
+    console.log('🚀 Socket initialized');
+    socket.on('connect', () => console.log('✅ Socket connected:', socket.id));
+    socket.on('disconnect', () => console.log('❌ Socket disconnected'));
+
     const $ = id => document.getElementById(id);
     const loginScreen = $('login-screen');
     const gameScreen  = $('game-screen');
@@ -565,7 +549,6 @@
     const boardEl     = $('board');
     const overlayEl   = $('result-overlay');
 
-    // ── INIT BOARD ────────────────────────────────────────────────────────
     function initBoard() {
         boardEl.innerHTML = '';
         for (let i = 0; i < 9; i++) {
@@ -578,14 +561,15 @@
     }
     initBoard();
 
-    // ── LOGIN / LOGOUT ────────────────────────────────────────────────────
     function login() {
         const raw = $('phone-input').value.trim();
+        console.log('🔐 Login attempt with phone:', raw);
         if (!raw) return showToast('Enter your phone number', 'fail');
         socket.emit('auth', { phone: raw });
     }
 
     function logout() {
+        console.log('🚪 Logout');
         socket.disconnect();
         myPhone = null;
         gameActive = false;
@@ -593,7 +577,6 @@
         loginScreen.classList.remove('hidden');
     }
 
-    // ── DEPOSIT / WITHDRAW ────────────────────────────────────────────────
     function showDepositModal() { $('deposit-modal').classList.remove('hidden'); }
     function hideDepositModal() { $('deposit-modal').classList.add('hidden'); }
 
@@ -650,24 +633,32 @@
         }
     }
 
-    // ── MATCHMAKING ───────────────────────────────────────────────────────
     function findMatch() {
-        if (!myPhone) return showToast('Not authenticated', 'fail');
+        console.log('🎮 Find match clicked!');
+        console.log('📱 myPhone:', myPhone);
+        console.log('🔌 Socket connected:', socket.connected);
+        
+        if (!myPhone) {
+            console.log('❌ No phone number');
+            return showToast('Not authenticated', 'fail');
+        }
+        
         playBtn.disabled = true;
         setStatus('Searching for opponent', 'active', true);
+        console.log('📤 Emitting find_match event');
         socket.emit('find_match');
     }
 
-    // ── CANCEL SEARCH ─────────────────────────────────────────────────────
     function cancelSearch() {
+        console.log('❌ Cancel search clicked');
         socket.emit('cancel_search');
     }
 
-    // ── MOVES ─────────────────────────────────────────────────────────────
     function makeMove(index) {
         if (!gameActive) return;
         if (currentTurn !== mySymbol) return;
         if (board[index]) return;
+        console.log(`🎲 Making move at index ${index}`);
         socket.emit('make_move', { gameId, index });
     }
 
@@ -705,7 +696,6 @@
         }
     }
 
-    // ── RESULT OVERLAY ────────────────────────────────────────────────────
     function showResult(icon, title, sub) {
         $('result-icon').textContent = icon;
         $('result-title').textContent = title;
@@ -734,7 +724,6 @@
         setStatus('Ready to play', '');
     }
 
-    // ── STATUS ────────────────────────────────────────────────────────────
     function setStatus(msg, type = '', searching = false) {
         statusEl.className = type ? `active ${type}` : '';
         statusEl.innerHTML = searching
@@ -742,7 +731,6 @@
             : msg;
     }
 
-    // ── BALANCE ───────────────────────────────────────────────────────────
     function updateBalance(value) {
         const formatted = `KES ${parseFloat(value).toFixed(2)}`;
         balanceEl.textContent = formatted;
@@ -750,7 +738,6 @@
         setTimeout(() => balanceEl.classList.remove('credit'), 600);
     }
 
-    // ── TOAST ─────────────────────────────────────────────────────────────
     let toastTimer;
     function showToast(msg, type = '') {
         const t = $('toast');
@@ -760,10 +747,10 @@
         toastTimer = setTimeout(() => { t.className = ''; }, 3500);
     }
 
-    // ── SOCKET EVENTS ─────────────────────────────────────────────────────
-
+    // Socket Events
     socket.on('auth_success', ({ balance }) => {
         myPhone = $('phone-input').value.trim();
+        console.log('✅ Auth success! Phone:', myPhone, 'Balance:', balance);
         $('wallet-phone').textContent = myPhone;
         updateBalance(balance);
         loginScreen.classList.add('hidden');
@@ -772,11 +759,12 @@
     });
 
     socket.on('balance_update', ({ balance }) => {
+        console.log('💰 Balance update:', balance);
         updateBalance(balance);
     });
 
-    // ── ONLINE COUNT ──────────────────────────────────────────────────────
     socket.on('online_count', ({ online, searching }) => {
+        console.log(`📊 Online: ${online}, Searching: ${searching}`);
         const onlineEl = document.getElementById('online-count');
         const searchingEl = document.getElementById('searching-count');
         if (onlineEl) onlineEl.textContent = online;
@@ -784,12 +772,14 @@
     });
 
     socket.on('waiting', () => {
+        console.log('⏳ Waiting for opponent...');
         setStatus('Searching for opponent', 'active', true);
         playBtn.classList.add('hidden');
         document.getElementById('cancel-btn').classList.remove('hidden');
     });
 
     socket.on('search_cancelled', () => {
+        console.log('❌ Search cancelled');
         setStatus('Ready to play', '');
         playBtn.disabled = false;
         playBtn.classList.remove('hidden');
@@ -798,10 +788,12 @@
     });
 
     socket.on('demo_bonus', ({ amount }) => {
+        console.log('🎉 Demo bonus:', amount);
         showToast(`🎉 KES ${amount} free demo balance added!`, 'success');
     });
 
     socket.on('match_found', ({ gameId: gId, playerX, playerO }) => {
+        console.log('✅ MATCH FOUND! Game:', gId);
         document.getElementById('cancel-btn').classList.add('hidden');
         gameId = gId;
         mySymbol = (socket.id === playerX) ? 'X' : 'O';
@@ -825,12 +817,14 @@
     });
 
     socket.on('move_made', ({ index, symbol, nextTurn }) => {
+        console.log(`🎲 Move made: ${symbol} at ${index}`);
         applyMove(index, symbol);
         currentTurn = nextTurn;
         updateTurnIndicators();
     });
 
     socket.on('game_finished', ({ result, winner, winnerSocketId, prize, refund }) => {
+        console.log('🏁 Game finished:', result);
         gameActive = false;
         [...boardEl.children].forEach(c => c.classList.remove('clickable'));
 
@@ -855,6 +849,7 @@
     });
 
     socket.on('error_msg', msg => {
+        console.log('❌ Error:', msg);
         showToast(msg, 'fail');
         if (!gameActive) {
             playBtn.disabled = false;
@@ -862,7 +857,10 @@
         }
     });
 
-    socket.on('info_msg', msg => showToast(msg, ''));
+    socket.on('info_msg', msg => {
+        console.log('ℹ️ Info:', msg);
+        showToast(msg, '');
+    });
 
     socket.on('withdrawal_success', ({ amount }) => {
         showToast(`KES ${amount} sent to your M-Pesa!`, 'success');
@@ -872,21 +870,14 @@
         showToast(`Withdrawal failed: ${reason}`, 'fail');
     });
 
-    socket.on('disconnect', () => {
-        if (gameActive) {
-            showToast('Connection lost', 'fail');
-            gameActive = false;
-        }
-    });
-
-    socket.on('connect', () => {
-        if (myPhone) socket.emit('auth', { phone: myPhone });
-    });
-
     // Enter key support
     $('phone-input').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
     $('deposit-amount').addEventListener('keydown', e => { if (e.key === 'Enter') submitDeposit(); });
     $('withdraw-amount').addEventListener('keydown', e => { if (e.key === 'Enter') submitWithdraw(); });
+    
+    // Debug: Check if button works
+    console.log('🔍 Play button element:', playBtn);
+    console.log('🔍 Play button onclick:', playBtn.onclick);
 </script>
 </body>
 </html>

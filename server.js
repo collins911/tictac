@@ -11,7 +11,13 @@ const crypto   = require('crypto');
 
 const app    = express();
 const server = http.createServer(app);
-const io     = new Server(server, { transports: ['websocket', 'polling'] });
+const io     = new Server(server, { 
+    transports: ['websocket', 'polling'],
+    cors: {
+        origin: "*",
+        methods: ["GET", "POST"]
+    }
+});
 
 // ─── REDIS (balances only) ────────────────────────────────────────────────
 const redis = createClient({ url: process.env.REDIS_URL });
@@ -129,13 +135,13 @@ const setDemoClaimed = async (phone) => {
 const broadcastOnlineCount = () => {
     const online    = io.sockets.sockets.size;
     const searching = waitingSocket ? 1 : 0;
+    console.log(`📊 Online: ${online}, Searching: ${searching}`);
     io.emit('online_count', { online, searching });
 };
 
-// ─── FIX 4: PERIODIC CLEANUP OF STALE WAITING SOCKET ──────────────────────
+// ─── PERIODIC CLEANUP OF STALE WAITING SOCKET ─────────────────────────────
 setInterval(() => {
     if (waitingSocket) {
-        // Check if the waiting socket is still connected
         const stillConnected = io.sockets.sockets.has(waitingSocket.id);
         if (!stillConnected) {
             console.log('🧹 Cleaning up stale waiting socket');
@@ -147,7 +153,7 @@ setInterval(() => {
             broadcastOnlineCount();
         }
     }
-}, 5000); // Check every 5 seconds
+}, 5000);
 
 // ─── HEALTH CHECK ─────────────────────────────────────────────────────────
 app.get('/health', (req, res) => res.json({ status: 'ok', ts: Date.now(), redis: redis.isReady }));
@@ -217,15 +223,15 @@ const checkWinner = (board) => {
 
 // ─── SOCKET EVENTS ────────────────────────────────────────────────────────
 io.on('connection', (socket) => {
-    // ─── FIX 3: INITIALIZE SOCKET STATE ──────────────────────────────────
     socket.searching = false;
     console.log(`🔌 New connection: ${socket.id}`);
     broadcastOnlineCount();
 
-    // ── AUTH ──────────────────────────────────────────────────────────────
     socket.on('auth', async ({ phone }) => {
+        console.log(`🔐 Auth attempt for phone: ${phone}`);
         const normalizedPhone = normalizePhone(phone);
         if (!normalizedPhone) {
+            console.log(`❌ Invalid phone number: ${phone}`);
             return socket.emit('error_msg', 'Invalid phone number. Use format: 07XXXXXXXX');
         }
         socket.phone = normalizedPhone;
@@ -253,19 +259,26 @@ io.on('connection', (socket) => {
         console.log(`✅ Auth success: ${normalizedPhone} - Balance: ${bal}`);
     });
 
-    // ── FIND MATCH ────────────────────────────────────────────────────────
     socket.on('find_match', async () => {
-        if (!socket.phone) return socket.emit('error_msg', 'Not authenticated.');
-        if (socket.searching) return socket.emit('error_msg', 'Already searching.');
+        console.log(`🎮 Find match request from: ${socket.phone} (socket: ${socket.id})`);
+        
+        if (!socket.phone) {
+            console.log(`❌ No phone number for socket ${socket.id}`);
+            return socket.emit('error_msg', 'Not authenticated.');
+        }
+        if (socket.searching) {
+            console.log(`⚠️ ${socket.phone} is already searching`);
+            return socket.emit('error_msg', 'Already searching.');
+        }
         
         socket.searching = true;
         audit('find_match', { phone: socket.phone });
         
-        // ─── FIX 3: ADD DEBUG LOGGING ─────────────────────────────────────
         console.log(`🔍 Player ${socket.phone} searching. Current waiting: ${waitingSocket?.phone || 'none'}`);
 
         const deducted = await deductBalance(socket.phone, ENTRY_FEE);
         if (!deducted) {
+            console.log(`❌ ${socket.phone} has insufficient balance`);
             socket.searching = false;
             return socket.emit('error_msg', `Insufficient balance. Need KES ${ENTRY_FEE}.`);
         }
@@ -273,7 +286,6 @@ io.on('connection', (socket) => {
         const newBal = await getBalance(socket.phone);
         socket.emit('balance_update', { balance: newBal.toFixed(2) });
 
-        // ── MATCH IMMEDIATELY if someone is waiting ───────────────────────
         if (waitingSocket && waitingSocket.id !== socket.id && waitingSocket.searching) {
             const opponent = waitingSocket;
             waitingSocket = null;
@@ -293,7 +305,7 @@ io.on('connection', (socket) => {
             };
             games.set(gameId, game);
             
-            console.log(`✅ Matched ${socket.phone} with ${opponent.phone} - Game: ${gameId}`);
+            console.log(`✅ MATCHED! ${socket.phone} with ${opponent.phone} - Game: ${gameId}`);
             audit('game_started', { gameId, playerX: socket.phone, playerO: opponent.phone });
 
             io.to(gameId).emit('match_found', {
@@ -303,22 +315,17 @@ io.on('connection', (socket) => {
             });
             broadcastOnlineCount();
         } else {
-            // No one waiting — put this socket in the waiting slot
             waitingSocket = socket;
-            console.log(`⏳ ${socket.phone} is now waiting`);
+            console.log(`⏳ ${socket.phone} is now waiting for opponent`);
             socket.emit('waiting', {});
             broadcastOnlineCount();
         }
     });
 
-    // ── CANCEL SEARCH ─────────────────────────────────────────────────────
-    // ─── FIX 1: PROPERLY RESET WAITING SOCKET STATE ───────────────────────
     socket.on('cancel_search', async () => {
+        console.log(`❌ Cancel search from: ${socket.phone}`);
         if (!socket.searching) return;
         
-        console.log(`❌ ${socket.phone} cancelled search`);
-        
-        // Clear waiting socket if this socket was waiting
         if (waitingSocket && waitingSocket.id === socket.id) {
             waitingSocket = null;
         }
@@ -333,7 +340,6 @@ io.on('connection', (socket) => {
         broadcastOnlineCount();
     });
 
-    // ── MAKE MOVE ─────────────────────────────────────────────────────────
     socket.on('make_move', ({ gameId, index }) => {
         const game = games.get(gameId);
         if (!game) return socket.emit('error_msg', 'Game not found.');
@@ -353,12 +359,9 @@ io.on('connection', (socket) => {
         if (result) finishGame(gameId, game, result);
     });
 
-    // ── DISCONNECT ────────────────────────────────────────────────────────
-    // ─── FIX 2: CLEAR WAITING SOCKET ON DISCONNECT ────────────────────────
     socket.on('disconnect', async () => {
         console.log(`🔌 Disconnect: ${socket.id} (${socket.phone || 'no phone'})`);
         
-        // CRITICAL: Clear waiting socket immediately
         if (waitingSocket && waitingSocket.id === socket.id) {
             console.log(`🧹 Removed ${socket.phone} from waiting slot`);
             waitingSocket = null;
@@ -368,10 +371,8 @@ io.on('connection', (socket) => {
             }
         }
         
-        // Clear searching flag
         socket.searching = false;
 
-        // Handle mid-game disconnect
         for (const [gameId, game] of games.entries()) {
             if (game.sockets.X === socket.id || game.sockets.O === socket.id) {
                 const mySymbol       = game.sockets.X === socket.id ? 'X' : 'O';
@@ -405,7 +406,6 @@ io.on('connection', (socket) => {
     });
 });
 
-// ─── FINISH GAME ──────────────────────────────────────────────────────────
 async function finishGame(gameId, game, result) {
     games.delete(gameId);
     if (result === 'DRAW') {
@@ -437,7 +437,6 @@ async function finishGame(gameId, game, result) {
     broadcastOnlineCount();
 }
 
-// ─── START ────────────────────────────────────────────────────────────────
 async function start() {
     try {
         await redis.connect();
