@@ -139,10 +139,9 @@ const deleteGame = async (gameId) => {
 
 // ─── ONLINE PLAYERS COUNT ─────────────────────────────────────────────────
 const broadcastOnlineCount = async () => {
-    const count = await redis.lLen('matchmaking_queue');
-    const sockets = await io.fetchSockets();
-    const online = sockets.length;
-    io.emit('online_count', { online, searching: count });
+    const searching = await redis.lLen('matchmaking_queue');
+    const online = io.sockets.sockets.size;
+    io.emit('online_count', { online, searching });
 };
 
 // ─── HEALTH CHECK ─────────────────────────────────────────────────────────
@@ -354,32 +353,38 @@ async function start() {
         socket.on('find_match', async () => {
             if (!socket.phone) return socket.emit('error_msg', 'Not authenticated.');
             if (socket.searching) return; // prevent double click
+            socket.searching = true; // lock immediately to prevent race condition
 
             const deducted = await deductBalance(socket.phone, ENTRY_FEE);
             if (!deducted) {
+                socket.searching = false;
                 return socket.emit('error_msg', `Insufficient balance. Min KES ${ENTRY_FEE} required.`);
             }
-
-            socket.searching = true;
             const newBal = await getBalance(socket.phone);
             socket.emit('balance_update', { balance: newBal.toFixed(2) });
 
-            const queueEntry = await redis.lPop('matchmaking_queue');
+            // Keep popping until we find a live opponent or the queue is empty
+            let matched = false;
+            while (true) {
+                const queueEntry = await redis.lPop('matchmaking_queue');
+                if (!queueEntry) break;
 
-            if (queueEntry) {
                 const [opponentPhone, opponentSocketId] = queueEntry.split('::');
-                const opponentSocket = io.sockets.sockets.get(opponentSocketId);
 
-                if (!opponentSocket || !opponentSocket.searching) {
-                    // Opponent gone or cancelled — refund them, put ourselves in queue
+                // Skip stale entries (same player re-queued, or disconnected opponent)
+                if (opponentPhone === socket.phone || opponentSocketId === socket.id) {
                     await creditBalance(opponentPhone, ENTRY_FEE);
-                    await redis.rPush('matchmaking_queue', `${socket.phone}::${socket.id}`);
-                    socket.emit('waiting', {});
-                    await broadcastOnlineCount();
-                    return;
+                    continue;
                 }
 
-                // Match found — start game
+                const opponentSocket = io.sockets.sockets.get(opponentSocketId);
+                if (!opponentSocket || !opponentSocket.searching) {
+                    // Opponent gone or cancelled — refund them and keep looking
+                    await creditBalance(opponentPhone, ENTRY_FEE);
+                    continue;
+                }
+
+                // Valid match found
                 opponentSocket.searching = false;
                 socket.searching = false;
 
@@ -403,7 +408,11 @@ async function start() {
                     playerO: opponentSocketId,
                 });
                 await broadcastOnlineCount();
-            } else {
+                matched = true;
+                break;
+            }
+
+            if (!matched) {
                 await redis.rPush('matchmaking_queue', `${socket.phone}::${socket.id}`);
                 socket.emit('waiting', {});
                 await broadcastOnlineCount();
