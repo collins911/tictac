@@ -728,7 +728,7 @@
     <div class="card">
         <div class="input-group">
             <label>Your Phone Number</label>
-            <input type="tel" id="phone-input" placeholder="2547XXXXXXXX" maxlength="15" value="254708374149">
+            <input type="tel" id="phone-input" placeholder="2547XXXXXXXX" maxlength="15">
         </div>
         <br>
         <button class="btn btn-primary" id="login-btn">Enter Arena</button>
@@ -843,11 +843,11 @@
         <div class="turn-indicators">
             <div class="player-indicator x-side" id="indicator-x">
                 <span class="symbol">X</span>
-                <span>YOU</span>
+                <span id="indicator-x-label">YOU</span>
             </div>
             <div style="display:flex;align-items:center;font-size:0.6rem;color:var(--muted);letter-spacing:2px;">VS</div>
             <div class="player-indicator o-side" id="indicator-o">
-                <span>OPP</span>
+                <span id="indicator-o-label">OPP</span>
                 <span class="symbol">O</span>
             </div>
         </div>
@@ -935,6 +935,7 @@
         // Invite system variables
         let currentRoomCode = null;
         let waitingForOpponent = false;
+        let pendingRoomJoin = null; // Store room code to join after auth
         const BASE_URL = window.location.origin;
 
         // --- DOM ELEMENTS ---
@@ -952,6 +953,17 @@
         const logoutBtn   = $('logout-btn');
         const depositBtn  = $('deposit-btn');
         const withdrawBtn = $('withdraw-btn');
+
+        // --- CHECK URL FOR ROOM CODE ON LOAD ---
+        function checkUrlForRoom() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const roomCode = urlParams.get('room');
+            if (roomCode) {
+                pendingRoomJoin = roomCode.toUpperCase();
+                console.log('📋 Found room code in URL:', pendingRoomJoin);
+            }
+        }
+        checkUrlForRoom();
 
         // --- INVITE FUNCTIONS ---
         function generateInviteLink(roomCode) {
@@ -990,12 +1002,12 @@
             showToast('Creating private room...', '');
         }
 
-        function joinPrivateRoom() {
-            const roomCode = $('room-code-input').value.trim().toUpperCase();
-            if (!roomCode) return showToast('Enter a room code', 'fail');
-            if (roomCode.length < 4) return showToast('Invalid room code', 'fail');
+        function joinPrivateRoom(roomCode) {
+            const code = roomCode || $('room-code-input').value.trim().toUpperCase();
+            if (!code) return showToast('Enter a room code', 'fail');
+            if (code.length < 4) return showToast('Invalid room code', 'fail');
             
-            socket.emit('join_private_room', { roomCode });
+            socket.emit('join_private_room', { roomCode: code });
             showToast('Joining room...', '');
         }
 
@@ -1133,15 +1145,6 @@
                     console.log('🔄 Re-authenticating with phone:', myPhone);
                     socket.emit('auth', { phone: myPhone });
                 }
-                
-                // Check for room code in URL
-                const urlParams = new URLSearchParams(window.location.search);
-                const roomCode = urlParams.get('room');
-                if (roomCode && authCompleted) {
-                    $('room-code-input').value = roomCode;
-                    $('invite-content').classList.add('open');
-                    $('invite-toggle-icon').classList.add('open');
-                }
             });
 
             socket.on('disconnect', (reason) => {
@@ -1168,14 +1171,15 @@
                 setStatus('Ready to play', '');
                 loadHistory();
                 
-                // Check for room code in URL after auth
-                const urlParams = new URLSearchParams(window.location.search);
-                const roomCode = urlParams.get('room');
-                if (roomCode) {
-                    $('room-code-input').value = roomCode;
+                // Auto-join room if there's a pending room code from URL
+                if (pendingRoomJoin) {
+                    console.log('🚪 Auto-joining room from URL:', pendingRoomJoin);
+                    $('room-code-input').value = pendingRoomJoin;
                     setTimeout(() => {
                         $('invite-content').classList.add('open');
                         $('invite-toggle-icon').classList.add('open');
+                        joinPrivateRoom(pendingRoomJoin);
+                        pendingRoomJoin = null;
                     }, 500);
                 }
             });
@@ -1211,6 +1215,7 @@
             });
 
             socket.on('private_match_found', ({ gameId: gId, mySymbol: symbol, opponent }) => {
+                console.log('✅ Private match found! Symbol:', symbol, 'Opponent:', opponent);
                 waitingForOpponent = false;
                 resetInviteView();
                 $('invite-content').classList.remove('open');
@@ -1222,12 +1227,13 @@
                 board = Array(9).fill(null);
                 gameActive = true;
 
+                // Update indicator labels
                 if (mySymbol === 'X') {
-                    $('indicator-x').querySelector('span:last-child').textContent = 'YOU';
-                    $('indicator-o').querySelector('span:first-child').textContent = 'OPP';
+                    $('indicator-x-label').textContent = 'YOU';
+                    $('indicator-o-label').textContent = 'OPP';
                 } else {
-                    $('indicator-x').querySelector('span:last-child').textContent = 'OPP';
-                    $('indicator-o').querySelector('span:first-child').textContent = 'YOU';
+                    $('indicator-x-label').textContent = 'OPP';
+                    $('indicator-o-label').textContent = 'YOU';
                 }
 
                 initBoard();
@@ -1242,6 +1248,7 @@
             socket.on('room_error', ({ error }) => {
                 showToast(error, 'fail');
                 resetInviteView();
+                pendingRoomJoin = null;
             });
 
             socket.on('room_cancelled', () => {
@@ -1280,11 +1287,11 @@
                 gameActive = true;
 
                 if (mySymbol === 'X') {
-                    $('indicator-x').querySelector('span:last-child').textContent = 'YOU';
-                    $('indicator-o').querySelector('span:first-child').textContent = 'OPP';
+                    $('indicator-x-label').textContent = 'YOU';
+                    $('indicator-o-label').textContent = 'OPP';
                 } else {
-                    $('indicator-x').querySelector('span:last-child').textContent = 'OPP';
-                    $('indicator-o').querySelector('span:first-child').textContent = 'YOU';
+                    $('indicator-x-label').textContent = 'OPP';
+                    $('indicator-o-label').textContent = 'YOU';
                 }
 
                 initBoard();
@@ -1295,6 +1302,7 @@
             });
 
             socket.on('move_made', ({ index, symbol, nextTurn }) => {
+                console.log('🎲 Move made:', symbol, 'at', index, 'Next turn:', nextTurn);
                 applyMove(index, symbol);
                 currentTurn = nextTurn;
                 updateTurnIndicators();
@@ -1337,6 +1345,7 @@
                     setStatus('Ready to play', '');
                 }
                 resetInviteView();
+                pendingRoomJoin = null;
             });
 
             socket.on('info_msg', msg => {
@@ -1365,9 +1374,20 @@
         }
 
         function makeMove(index) {
-            if (!gameActive) return;
-            if (currentTurn !== mySymbol) return;
-            if (board[index]) return;
+            if (!gameActive) {
+                console.log('❌ Game not active');
+                return;
+            }
+            if (currentTurn !== mySymbol) {
+                console.log('❌ Not your turn. Current:', currentTurn, 'You:', mySymbol);
+                showToast("Not your turn!", 'warn');
+                return;
+            }
+            if (board[index]) {
+                console.log('❌ Cell already taken');
+                return;
+            }
+            console.log('🎲 Emitting move:', { gameId, index });
             socket.emit('make_move', { gameId, index });
         }
 
@@ -1599,7 +1619,7 @@
             
             $('invite-toggle').addEventListener('click', toggleInvite);
             $('create-room-btn').addEventListener('click', createPrivateRoom);
-            $('join-room-btn').addEventListener('click', joinPrivateRoom);
+            $('join-room-btn').addEventListener('click', () => joinPrivateRoom());
             $('cancel-room-btn').addEventListener('click', cancelPrivateRoom);
             
             $('copy-code-btn').addEventListener('click', () => {
