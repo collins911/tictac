@@ -480,9 +480,19 @@
         <div class="grid" id="board"></div>
     </div>
 
+    <!-- ONLINE COUNT -->
+    <div id="online-bar" style="width:100%;display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;font-size:0.65rem;letter-spacing:2px;color:var(--muted);">
+        <span>🟢 <span id="online-count">0</span> ONLINE</span>
+        <span>🔍 <span id="searching-count">0</span> SEARCHING</span>
+    </div>
+
     <!-- FIND MATCH -->
     <button class="btn btn-primary" id="play-btn" onclick="findMatch()">
         Search for Match — KES 50
+    </button>
+    <button class="btn btn-danger hidden" id="cancel-btn" onclick="cancelSearch()"
+        style="border-color:rgba(255,69,96,0.5);color:var(--red);">
+        ✕ Cancel Search
     </button>
 
     <!-- LOGOUT -->
@@ -648,6 +658,11 @@
         socket.emit('find_match');
     }
 
+    // ── CANCEL SEARCH ─────────────────────────────────────────────────────
+    function cancelSearch() {
+        socket.emit('cancel_search');
+    }
+
     // ── MOVES ─────────────────────────────────────────────────────────────
     function makeMove(index) {
         if (!gameActive) return;
@@ -713,6 +728,7 @@
         boardWrap.classList.add('hidden');
         playBtn.classList.remove('hidden');
         playBtn.disabled = false;
+        document.getElementById('cancel-btn').classList.add('hidden');
         $('indicator-x').classList.remove('active-turn');
         $('indicator-o').classList.remove('active-turn');
         setStatus('Ready to play', '');
@@ -759,17 +775,34 @@
         updateBalance(balance);
     });
 
-    // Demo bonus notification
+    // ── ONLINE COUNT ──────────────────────────────────────────────────────
+    socket.on('online_count', ({ online, searching }) => {
+        const onlineEl = document.getElementById('online-count');
+        const searchingEl = document.getElementById('searching-count');
+        if (onlineEl) onlineEl.textContent = online;
+        if (searchingEl) searchingEl.textContent = searching;
+    });
+
+    socket.on('waiting', () => {
+        setStatus('Searching for opponent', 'active', true);
+        playBtn.classList.add('hidden');
+        document.getElementById('cancel-btn').classList.remove('hidden');
+    });
+
+    socket.on('search_cancelled', () => {
+        setStatus('Ready to play', '');
+        playBtn.disabled = false;
+        playBtn.classList.remove('hidden');
+        document.getElementById('cancel-btn').classList.add('hidden');
+        showToast('Search cancelled — KES 50 refunded', 'warn');
+    });
+
     socket.on('demo_bonus', ({ amount }) => {
         showToast(`🎉 KES ${amount} free demo balance added!`, 'success');
     });
 
-    // Waiting in queue
-    socket.on('waiting', () => {
-        setStatus('Searching for opponent', 'active', true);
-    });
-
     socket.on('match_found', ({ gameId: gId, playerX, playerO }) => {
+        document.getElementById('cancel-btn').classList.add('hidden');
         gameId = gId;
         mySymbol = (socket.id === playerX) ? 'X' : 'O';
         currentTurn = 'X';

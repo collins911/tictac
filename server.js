@@ -13,9 +13,13 @@ const crypto = require('crypto');
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
-    cors: { origin: '*' },
     transports: ['websocket', 'polling'],
 });
+
+// ─── REDIS CLIENTS ────────────────────────────────────────────────────────
+const redis    = createClient({ url: process.env.REDIS_URL || 'redis://127.0.0.1:6380' });
+const redisPub = createClient({ url: process.env.REDIS_URL || 'redis://127.0.0.1:6380' });
+const redisSub = createClient({ url: process.env.REDIS_URL || 'redis://127.0.0.1:6380' });
 
 // ─── SECURITY HEADERS ────────────────────────────────────────────────────
 app.use(helmet({
@@ -54,8 +58,8 @@ const withdrawLimiter = rateLimit({
 });
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────
-const ENTRY_FEE = 50;
-const WIN_PRIZE = 85;
+const ENTRY_FEE  = 50;
+const WIN_PRIZE  = 85;
 const DRAW_REFUND = 50;
 const WITHDRAW_FEE = 10;
 const DEMO_BONUS = 1000;
@@ -121,29 +125,28 @@ const audit = (event, data) => {
     console.log(JSON.stringify({ timestamp: new Date().toISOString(), event, ...data }));
 };
 
-// ─── HEALTH CHECK ─────────────────────────────────────────────────────────
-app.get('/health', (req, res) => res.json({ status: 'ok', ts: Date.now() }));
-
-// ─── SERVER-SIDE GAME STATE (stored in Redis for multi-instance support) ──
-const checkWinner = (board) => {
-    for (const [a, b, c] of WIN_COMBOS) {
-        if (board[a] && board[a] === board[b] && board[a] === board[c]) return board[a];
-    }
-    return board.every(Boolean) ? 'DRAW' : null;
-};
-
+// ─── GAME STATE IN REDIS ──────────────────────────────────────────────────
 const saveGame = async (gameId, game) => {
     await redis.set(`game:${gameId}`, JSON.stringify(game), { EX: 3600 });
 };
-
 const getGame = async (gameId) => {
     const raw = await redis.get(`game:${gameId}`);
     return raw ? JSON.parse(raw) : null;
 };
-
 const deleteGame = async (gameId) => {
     await redis.del(`game:${gameId}`);
 };
+
+// ─── ONLINE PLAYERS COUNT ─────────────────────────────────────────────────
+const broadcastOnlineCount = async () => {
+    const count = await redis.lLen('matchmaking_queue');
+    const sockets = await io.fetchSockets();
+    const online = sockets.length;
+    io.emit('online_count', { online, searching: count });
+};
+
+// ─── HEALTH CHECK ─────────────────────────────────────────────────────────
+app.get('/health', (req, res) => res.json({ status: 'ok', ts: Date.now() }));
 
 // ─── DEPOSIT: STK PUSH ────────────────────────────────────────────────────
 app.post('/mpesa/deposit', depositLimiter, async (req, res) => {
@@ -224,7 +227,7 @@ app.post('/intasend/webhook', async (req, res) => {
     res.send('OK');
 });
 
-// ─── WITHDRAWAL: B2C ─────────────────────────────────────────────────────
+// ─── WITHDRAWAL ───────────────────────────────────────────────────────────
 app.post('/mpesa/withdraw', withdrawLimiter, async (req, res) => {
     const { phone, amount } = req.body;
 
@@ -311,28 +314,19 @@ app.use((err, req, res, next) => {
     res.status(500).json({ error: 'Internal server error' });
 });
 
-// ─── SOCKET.IO + REDIS ADAPTER ────────────────────────────────────────────
-let redis;
-let redisPub;
-let redisSub;
-
+// ─── START ────────────────────────────────────────────────────────────────
 async function start() {
-    // Main redis client
-    redis = createClient({ url: process.env.REDIS_URL || 'redis://127.0.0.1:6380' });
     await redis.connect();
-
-    // Pub/sub clients for Socket.IO Redis adapter
-    redisPub = redis.duplicate();
-    redisSub = redis.duplicate();
     await redisPub.connect();
     await redisSub.connect();
 
-    // Attach Redis adapter so all instances share socket rooms
+    // Attach Redis adapter for multi-instance support
     io.adapter(createAdapter(redisPub, redisSub));
 
     await redis.del('matchmaking_queue');
 
-    io.on('connection', (socket) => {
+    io.on('connection', async (socket) => {
+        await broadcastOnlineCount();
 
         // ── AUTH ──────────────────────────────────────────────────────────
         socket.on('auth', async ({ phone }) => {
@@ -342,7 +336,6 @@ async function start() {
             socket.phone = normalizedPhone;
             socket.join(`phone:${normalizedPhone}`);
 
-            // Demo bonus for first-time users
             const hasPlayed = await redis.get(`user:${normalizedPhone}:demo_claimed`);
             if (!hasPlayed) {
                 await creditBalance(normalizedPhone, DEMO_BONUS);
@@ -354,17 +347,20 @@ async function start() {
             const bal = await getBalance(normalizedPhone);
             audit('auth', { phone: normalizedPhone });
             socket.emit('auth_success', { balance: bal.toFixed(2) });
+            await broadcastOnlineCount();
         });
 
         // ── FIND MATCH ────────────────────────────────────────────────────
         socket.on('find_match', async () => {
             if (!socket.phone) return socket.emit('error_msg', 'Not authenticated.');
+            if (socket.searching) return; // prevent double click
 
             const deducted = await deductBalance(socket.phone, ENTRY_FEE);
             if (!deducted) {
                 return socket.emit('error_msg', `Insufficient balance. Min KES ${ENTRY_FEE} required.`);
             }
 
+            socket.searching = true;
             const newBal = await getBalance(socket.phone);
             socket.emit('balance_update', { balance: newBal.toFixed(2) });
 
@@ -374,12 +370,18 @@ async function start() {
                 const [opponentPhone, opponentSocketId] = queueEntry.split('::');
                 const opponentSocket = io.sockets.sockets.get(opponentSocketId);
 
-                if (!opponentSocket) {
+                if (!opponentSocket || !opponentSocket.searching) {
+                    // Opponent gone or cancelled — refund them, put ourselves in queue
                     await creditBalance(opponentPhone, ENTRY_FEE);
                     await redis.rPush('matchmaking_queue', `${socket.phone}::${socket.id}`);
                     socket.emit('waiting', {});
+                    await broadcastOnlineCount();
                     return;
                 }
+
+                // Match found — start game
+                opponentSocket.searching = false;
+                socket.searching = false;
 
                 const gameId = `game_${crypto.randomUUID()}`;
                 socket.join(gameId);
@@ -400,10 +402,32 @@ async function start() {
                     playerX: socket.id,
                     playerO: opponentSocketId,
                 });
+                await broadcastOnlineCount();
             } else {
                 await redis.rPush('matchmaking_queue', `${socket.phone}::${socket.id}`);
                 socket.emit('waiting', {});
+                await broadcastOnlineCount();
             }
+        });
+
+        // ── CANCEL SEARCH ─────────────────────────────────────────────────
+        socket.on('cancel_search', async () => {
+            if (!socket.phone || !socket.searching) return;
+
+            const queue = await redis.lRange('matchmaking_queue', 0, -1);
+            for (const entry of queue) {
+                if (entry.startsWith(`${socket.phone}::`) || entry.endsWith(`::${socket.id}`)) {
+                    await redis.lRem('matchmaking_queue', 0, entry);
+                    await creditBalance(socket.phone, ENTRY_FEE);
+                }
+            }
+
+            socket.searching = false;
+            const bal = await getBalance(socket.phone);
+            socket.emit('balance_update', { balance: bal.toFixed(2) });
+            socket.emit('search_cancelled', {});
+            audit('search_cancelled', { phone: socket.phone });
+            await broadcastOnlineCount();
         });
 
         // ── MAKE MOVE ─────────────────────────────────────────────────────
@@ -451,25 +475,30 @@ async function start() {
                     io.to(gameId).emit('game_finished', { result: 'WIN', winner: result, winnerSocketId, prize: WIN_PRIZE });
                 }
                 await deleteGame(gameId);
+                await broadcastOnlineCount();
             }
         });
 
         // ── DISCONNECT ────────────────────────────────────────────────────
         socket.on('disconnect', async () => {
             if (socket.phone) {
-                const queue = await redis.lRange('matchmaking_queue', 0, -1);
-                for (const entry of queue) {
-                    if (entry.startsWith(`${socket.phone}::`) || entry.endsWith(`::${socket.id}`)) {
-                        await redis.lRem('matchmaking_queue', 0, entry);
-                        await creditBalance(socket.phone, ENTRY_FEE);
+                // Remove from queue and refund if searching
+                if (socket.searching) {
+                    const queue = await redis.lRange('matchmaking_queue', 0, -1);
+                    for (const entry of queue) {
+                        if (entry.startsWith(`${socket.phone}::`) || entry.endsWith(`::${socket.id}`)) {
+                            await redis.lRem('matchmaking_queue', 0, entry);
+                            await creditBalance(socket.phone, ENTRY_FEE);
+                        }
                     }
                 }
 
-                // Find any active game this socket was in
+                // Handle mid-game disconnect
                 const gameKeys = await redis.keys('game:*');
                 for (const key of gameKeys) {
-                    const game = JSON.parse(await redis.get(key));
-                    if (!game) continue;
+                    const raw = await redis.get(key);
+                    if (!raw) continue;
+                    const game = JSON.parse(raw);
                     if (game.sockets.X === socket.id || game.sockets.O === socket.id) {
                         const gameId = key.replace('game:', '');
                         const mySymbol = game.sockets.X === socket.id ? 'X' : 'O';
@@ -481,6 +510,7 @@ async function start() {
                         const newBal = await getBalance(opponentPhone);
                         const opponentSocket = io.sockets.sockets.get(opponentSocketId);
                         if (opponentSocket) {
+                            opponentSocket.searching = false;
                             opponentSocket.emit('balance_update', { balance: newBal.toFixed(2) });
                             opponentSocket.emit('game_finished', {
                                 result: 'FORFEIT',
@@ -494,6 +524,7 @@ async function start() {
                     }
                 }
             }
+            await broadcastOnlineCount();
         });
 
         // ── GET BALANCE ───────────────────────────────────────────────────
@@ -507,5 +538,12 @@ async function start() {
     const PORT = process.env.PORT || 3000;
     server.listen(PORT, () => console.log(`🚀 TicTac Cash: http://localhost:${PORT}`));
 }
+
+const checkWinner = (board) => {
+    for (const [a, b, c] of WIN_COMBOS) {
+        if (board[a] && board[a] === board[b] && board[a] === board[c]) return board[a];
+    }
+    return board.every(Boolean) ? 'DRAW' : null;
+};
 
 start();
