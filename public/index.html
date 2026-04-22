@@ -97,7 +97,7 @@
             background: var(--surface);
             border: 1px solid var(--border);
             border-radius: 16px;
-            padding: 20px;
+            padding: 24px;
         }
 
         .input-group {
@@ -129,6 +129,12 @@
             box-shadow: 0 0 0 3px var(--green-glow);
         }
         input.error { border-color: var(--red); }
+
+        .pin-input {
+            font-size: 2rem !important;
+            text-align: center;
+            letter-spacing: 8px;
+        }
 
         .btn {
             width: 100%;
@@ -726,12 +732,33 @@
     </div>
 
     <div class="card">
-        <div class="input-group">
-            <label>Your Phone Number</label>
-            <input type="tel" id="phone-input" placeholder="2547XXXXXXXX" maxlength="15">
+        <!-- Step 1: Phone Number -->
+        <div id="phone-step">
+            <div class="input-group">
+                <label>Your Phone Number</label>
+                <input type="tel" id="phone-input" placeholder="2547XXXXXXXX" maxlength="15">
+            </div>
+            <br>
+            <button class="btn btn-primary" id="continue-btn">Continue</button>
         </div>
-        <br>
-        <button class="btn btn-primary" id="login-btn">Enter Arena</button>
+        
+        <!-- Step 2: PIN Entry (Login or Register) -->
+        <div id="pin-step" class="hidden">
+            <div id="pin-title" style="font-size: 0.8rem; letter-spacing: 2px; color: var(--muted); text-align: center; margin-bottom: 16px;">
+                Enter your PIN
+            </div>
+            <div class="input-group">
+                <label id="pin-label">4-Digit PIN</label>
+                <input type="password" id="pin-input" class="pin-input" placeholder="****" maxlength="4" inputmode="numeric" pattern="\d*">
+            </div>
+            <div id="confirm-pin-group" class="input-group hidden">
+                <label>Confirm PIN</label>
+                <input type="password" id="confirm-pin-input" class="pin-input" placeholder="****" maxlength="4" inputmode="numeric" pattern="\d*">
+            </div>
+            <br>
+            <button class="btn btn-primary" id="submit-pin-btn">Enter Arena</button>
+            <button class="btn btn-outline" id="back-btn" style="margin-top: 8px;">← Back</button>
+        </div>
     </div>
     <p style="font-size:0.6rem;color:var(--muted);text-align:center;letter-spacing:1px;">
         Demo mode — no real money involved
@@ -768,7 +795,6 @@
         </div>
         <div class="invite-content" id="invite-content">
             <div class="invite-body" id="invite-body">
-                <!-- Default: Show options -->
                 <div id="invite-options">
                     <button class="btn btn-primary" id="create-room-btn" style="margin-bottom: 12px;">
                         🏠 Create Private Room — KES 50
@@ -783,7 +809,6 @@
                     </div>
                 </div>
                 
-                <!-- Room created view (hidden by default) -->
                 <div id="room-created-view" class="hidden">
                     <div class="room-code-display">
                         <div class="room-code-label">Share this code</div>
@@ -928,6 +953,10 @@
         let gameActive = false;
         let authCompleted = false;
         
+        // Login/Register state
+        let isRegistering = false;
+        let checkedPhone = null;
+        
         // Game history storage
         let gameHistory = [];
         const HISTORY_STORAGE_KEY = 'tictac_history';
@@ -935,7 +964,7 @@
         // Invite system variables
         let currentRoomCode = null;
         let waitingForOpponent = false;
-        let pendingRoomJoin = null; // Store room code to join after auth
+        let pendingRoomJoin = null;
         const BASE_URL = window.location.origin;
 
         // --- DOM ELEMENTS ---
@@ -949,10 +978,6 @@
         const balanceEl   = $('balance');
         const boardEl     = $('board');
         const overlayEl   = $('result-overlay');
-        const loginBtn    = $('login-btn');
-        const logoutBtn   = $('logout-btn');
-        const depositBtn  = $('deposit-btn');
-        const withdrawBtn = $('withdraw-btn');
 
         // --- CHECK URL FOR ROOM CODE ON LOAD ---
         function checkUrlForRoom() {
@@ -964,6 +989,44 @@
             }
         }
         checkUrlForRoom();
+
+        // --- LOGIN/REGISTER FUNCTIONS ---
+        function showPhoneStep() {
+            $('phone-step').classList.remove('hidden');
+            $('pin-step').classList.add('hidden');
+            $('pin-input').value = '';
+            $('confirm-pin-input').value = '';
+        }
+
+        function showPinStep() {
+            $('phone-step').classList.add('hidden');
+            $('pin-step').classList.remove('hidden');
+        }
+
+        function checkUserAndProceed() {
+            const raw = $('phone-input').value.trim();
+            if (!raw) return showToast('Enter your phone number', 'fail');
+            
+            checkedPhone = raw;
+            socket.emit('check_user', { phone: raw });
+            showToast('Checking...', '');
+        }
+
+        function submitPin() {
+            const pin = $('pin-input').value.trim();
+            if (!pin || pin.length !== 4) return showToast('Enter a 4-digit PIN', 'fail');
+            if (!/^\d+$/.test(pin)) return showToast('PIN must be numbers only', 'fail');
+            
+            if (isRegistering) {
+                const confirmPin = $('confirm-pin-input').value.trim();
+                if (pin !== confirmPin) return showToast('PINs do not match', 'fail');
+                socket.emit('register', { phone: checkedPhone, pin });
+                showToast('Creating account...', '');
+            } else {
+                socket.emit('auth', { phone: checkedPhone, pin });
+                showToast('Logging in...', '');
+            }
+        }
 
         // --- INVITE FUNCTIONS ---
         function generateInviteLink(roomCode) {
@@ -1142,8 +1205,7 @@
             socket.on('connect', () => {
                 console.log('✅ Socket connected:', socket.id);
                 if (myPhone && !authCompleted) {
-                    console.log('🔄 Re-authenticating with phone:', myPhone);
-                    socket.emit('auth', { phone: myPhone });
+                    console.log('🔄 Already logged in');
                 }
             });
 
@@ -1160,9 +1222,39 @@
                 showToast('Connection error. Check your internet.', 'fail');
             });
 
+            // Login/Register events
+            socket.on('user_check_result', ({ exists, phone }) => {
+                isRegistering = !exists;
+                checkedPhone = phone;
+                
+                showPinStep();
+                
+                if (isRegistering) {
+                    $('pin-title').textContent = 'Create a 4-Digit PIN';
+                    $('pin-label').textContent = 'Choose PIN';
+                    $('confirm-pin-group').classList.remove('hidden');
+                    $('submit-pin-btn').textContent = 'Create Account';
+                } else {
+                    $('pin-title').textContent = `Welcome back! Enter your PIN`;
+                    $('pin-label').textContent = 'Your PIN';
+                    $('confirm-pin-group').classList.add('hidden');
+                    $('submit-pin-btn').textContent = 'Enter Arena';
+                }
+                $('pin-input').focus();
+            });
+
+            socket.on('registration_success', ({ phone }) => {
+                myPhone = phone;
+                showToast('Account created! Please login with your PIN.', 'success');
+                setTimeout(() => {
+                    showPhoneStep();
+                    $('phone-input').value = phone;
+                }, 1500);
+            });
+
             socket.on('auth_success', ({ balance }) => {
                 authCompleted = true;
-                myPhone = $('phone-input').value.trim();
+                myPhone = checkedPhone;
                 console.log('✅ Auth success! Phone:', myPhone, 'Balance:', balance);
                 $('wallet-phone').textContent = myPhone;
                 updateBalance(balance);
@@ -1170,6 +1262,12 @@
                 gameScreen.classList.remove('hidden');
                 setStatus('Ready to play', '');
                 loadHistory();
+                
+                // Reset login form
+                showPhoneStep();
+                $('phone-input').value = '';
+                $('pin-input').value = '';
+                $('confirm-pin-input').value = '';
                 
                 // Auto-join room if there's a pending room code from URL
                 if (pendingRoomJoin) {
@@ -1227,7 +1325,6 @@
                 board = Array(9).fill(null);
                 gameActive = true;
 
-                // Update indicator labels
                 if (mySymbol === 'X') {
                     $('indicator-x-label').textContent = 'YOU';
                     $('indicator-o-label').textContent = 'OPP';
@@ -1478,23 +1575,6 @@
         }
 
         // --- USER ACTIONS ---
-        function login() {
-            const raw = $('phone-input').value.trim();
-            console.log('🔐 Login attempt with phone:', raw);
-            if (!raw) return showToast('Enter your phone number', 'fail');
-            myPhone = raw;
-            authCompleted = false;
-            
-            if (!socket.connected) {
-                socket.connect();
-                setTimeout(() => {
-                    socket.emit('auth', { phone: raw });
-                }, 500);
-            } else {
-                socket.emit('auth', { phone: raw });
-            }
-        }
-
         function logout() {
             console.log('🚪 Logout');
             socket.disconnect();
@@ -1601,12 +1681,14 @@
 
         // --- INITIALIZE ---
         function bindEvents() {
-            loginBtn.addEventListener('click', login);
-            logoutBtn.addEventListener('click', logout);
-            playBtn.addEventListener('click', (e) => { e.preventDefault(); findMatch(); });
-            cancelBtn.addEventListener('click', cancelSearch);
-            depositBtn.addEventListener('click', showDepositModal);
-            withdrawBtn.addEventListener('click', showWithdrawModal);
+            $('continue-btn').addEventListener('click', checkUserAndProceed);
+            $('submit-pin-btn').addEventListener('click', submitPin);
+            $('back-btn').addEventListener('click', showPhoneStep);
+            $('logout-btn').addEventListener('click', logout);
+            $('play-btn').addEventListener('click', (e) => { e.preventDefault(); findMatch(); });
+            $('cancel-btn').addEventListener('click', cancelSearch);
+            $('deposit-btn').addEventListener('click', showDepositModal);
+            $('withdraw-btn').addEventListener('click', showWithdrawModal);
             
             $('submit-deposit').addEventListener('click', submitDeposit);
             $('cancel-deposit').addEventListener('click', hideDepositModal);
@@ -1641,10 +1723,20 @@
                 copyToClipboard(link);
             });
             
-            $('phone-input').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
+            $('phone-input').addEventListener('keydown', e => { if (e.key === 'Enter') checkUserAndProceed(); });
+            $('pin-input').addEventListener('keydown', e => { if (e.key === 'Enter') submitPin(); });
+            $('confirm-pin-input').addEventListener('keydown', e => { if (e.key === 'Enter') submitPin(); });
             $('deposit-amount').addEventListener('keydown', e => { if (e.key === 'Enter') submitDeposit(); });
             $('withdraw-amount').addEventListener('keydown', e => { if (e.key === 'Enter') submitWithdraw(); });
             $('room-code-input').addEventListener('keydown', e => { if (e.key === 'Enter') joinPrivateRoom(); });
+            
+            // Only allow numbers in PIN fields
+            $('pin-input').addEventListener('input', (e) => {
+                e.target.value = e.target.value.replace(/\D/g, '').slice(0, 4);
+            });
+            $('confirm-pin-input').addEventListener('input', (e) => {
+                e.target.value = e.target.value.replace(/\D/g, '').slice(0, 4);
+            });
             
             console.log('✅ All event listeners bound');
         }
@@ -1652,7 +1744,6 @@
         initSocket();
         initBoard();
         bindEvents();
-        loadHistory();
         
         window.findMatch = findMatch;
         

@@ -8,6 +8,7 @@ const helmet   = require('helmet');
 const rateLimit = require('express-rate-limit');
 const path     = require('path');
 const crypto   = require('crypto');
+const bcrypt   = require('bcrypt');
 
 const app    = express();
 const server = http.createServer(app);
@@ -19,7 +20,7 @@ const io     = new Server(server, {
     }
 });
 
-// ─── REDIS (balances only) ────────────────────────────────────────────────
+// ─── REDIS (balances and PINs) ────────────────────────────────────────────
 const redis = createClient({ url: process.env.REDIS_URL });
 redis.on('error',   e => console.error('Redis error:', e.message));
 redis.on('connect', () => console.log('Redis connected'));
@@ -29,6 +30,7 @@ let   waitingSocket = null;          // single socket waiting for opponent
 const games         = new Map();     // gameId -> game object
 const balances      = new Map();     // phone  -> balance (fallback if Redis down)
 const privateRooms  = new Map();     // roomCode -> { creator, createdAt, players }
+const userPins      = new Map();     // phone  -> hashed PIN (fallback)
 
 // ─── SECURITY ────────────────────────────────────────────────────────────
 app.use(helmet({
@@ -51,6 +53,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 // ─── RATE LIMITING ────────────────────────────────────────────────────────
 const depositLimiter  = rateLimit({ windowMs: 60000, max: 5,  message: { error: 'Too many deposit attempts.' } });
 const withdrawLimiter = rateLimit({ windowMs: 60000, max: 3,  message: { error: 'Too many withdrawal attempts.' } });
+const authLimiter     = rateLimit({ windowMs: 60000, max: 10, message: { error: 'Too many login attempts.' } });
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────
 const ENTRY_FEE   = 50;
@@ -85,9 +88,48 @@ const validateAmount = (amount) => {
     return p;
 };
 
+const validatePin = (pin) => {
+    return /^\d{4}$/.test(pin);
+};
+
 // Generate a short room code
 const generateRoomCode = () => {
     return crypto.randomBytes(3).toString('hex').toUpperCase();
+};
+
+// ─── PIN MANAGEMENT ───────────────────────────────────────────────────────
+const hashPin = async (pin) => {
+    return await bcrypt.hash(pin, 10);
+};
+
+const verifyPin = async (pin, hash) => {
+    return await bcrypt.compare(pin, hash);
+};
+
+const getUserPin = async (phone) => {
+    try {
+        if (redis.isReady) {
+            const pin = await redis.get(`user:${phone}:pin`);
+            if (pin) {
+                userPins.set(phone, pin);
+                return pin;
+            }
+        }
+    } catch(e) {}
+    return userPins.get(phone) || null;
+};
+
+const setUserPin = async (phone, pin) => {
+    const hashedPin = await hashPin(pin);
+    userPins.set(phone, hashedPin);
+    try {
+        if (redis.isReady) await redis.set(`user:${phone}:pin`, hashedPin);
+    } catch(e) {}
+};
+
+const userExists = async (phone) => {
+    const pin = await getUserPin(phone);
+    return !!pin;
 };
 
 // ─── BALANCE (Redis with in-memory fallback) ──────────────────────────────
@@ -188,6 +230,16 @@ app.get('/api/room/:code', (req, res) => {
     }
 });
 
+// ─── CHECK USER EXISTS ────────────────────────────────────────────────────
+app.post('/api/check-user', async (req, res) => {
+    const { phone } = req.body;
+    const normalizedPhone = normalizePhone(phone);
+    if (!normalizedPhone) return res.status(400).json({ error: 'Invalid phone number.' });
+    
+    const exists = await userExists(normalizedPhone);
+    res.json({ exists });
+});
+
 // ─── DEPOSIT ─────────────────────────────────────────────────────────────
 app.post('/mpesa/deposit', depositLimiter, async (req, res) => {
     const { phone, amount } = req.body;
@@ -255,44 +307,113 @@ const checkWinner = (board) => {
 io.on('connection', (socket) => {
     socket.searching = false;
     socket.currentRoom = null;
+    socket.authenticated = false;
     console.log(`🔌 New connection: ${socket.id}`);
     broadcastOnlineCount();
 
-    socket.on('auth', async ({ phone }) => {
+    // ─── CHECK IF USER EXISTS ─────────────────────────────────────────────
+    socket.on('check_user', async ({ phone }) => {
+        const normalizedPhone = normalizePhone(phone);
+        if (!normalizedPhone) {
+            return socket.emit('error_msg', 'Invalid phone number.');
+        }
+        const exists = await userExists(normalizedPhone);
+        socket.emit('user_check_result', { exists, phone: normalizedPhone });
+    });
+
+    // ─── REGISTER NEW USER ────────────────────────────────────────────────
+    socket.on('register', async ({ phone, pin }) => {
+        const normalizedPhone = normalizePhone(phone);
+        if (!normalizedPhone) {
+            return socket.emit('error_msg', 'Invalid phone number.');
+        }
+        if (!validatePin(pin)) {
+            return socket.emit('error_msg', 'PIN must be 4 digits.');
+        }
+        
+        const exists = await userExists(normalizedPhone);
+        if (exists) {
+            return socket.emit('error_msg', 'User already exists. Please login.');
+        }
+        
+        await setUserPin(normalizedPhone, pin);
+        
+        // Give demo bonus
+        await creditBalance(normalizedPhone, DEMO_BONUS);
+        await setDemoClaimed(normalizedPhone);
+        
+        audit('user_registered', { phone: normalizedPhone });
+        socket.emit('registration_success', { phone: normalizedPhone });
+        console.log(`✅ New user registered: ${normalizedPhone}`);
+    });
+
+    // ─── AUTHENTICATE (LOGIN) ─────────────────────────────────────────────
+    socket.on('auth', async ({ phone, pin }) => {
         console.log(`🔐 Auth attempt for phone: ${phone}`);
         const normalizedPhone = normalizePhone(phone);
         if (!normalizedPhone) {
             console.log(`❌ Invalid phone number: ${phone}`);
-            return socket.emit('error_msg', 'Invalid phone number. Use format: 07XXXXXXXX');
+            return socket.emit('error_msg', 'Invalid phone number.');
         }
+        if (!validatePin(pin)) {
+            return socket.emit('error_msg', 'PIN must be 4 digits.');
+        }
+        
+        const storedPin = await getUserPin(normalizedPhone);
+        if (!storedPin) {
+            return socket.emit('error_msg', 'User not found. Please register.');
+        }
+        
+        const pinValid = await verifyPin(pin, storedPin);
+        if (!pinValid) {
+            audit('auth_failed', { phone: normalizedPhone, reason: 'Invalid PIN' });
+            return socket.emit('error_msg', 'Invalid PIN.');
+        }
+        
         socket.phone = normalizedPhone;
+        socket.authenticated = true;
         socket.join(`phone:${normalizedPhone}`);
 
-        const claimed = await getDemoClaimed(normalizedPhone);
-        if (!claimed) {
-            await creditBalance(normalizedPhone, DEMO_BONUS);
-            await setDemoClaimed(normalizedPhone);
-            audit('demo_bonus', { phone: normalizedPhone, amount: DEMO_BONUS });
-            socket.emit('demo_bonus', { amount: DEMO_BONUS });
-        } else {
-            const bal = await getBalance(normalizedPhone);
-            if (bal < ENTRY_FEE) {
-                await creditBalance(normalizedPhone, DEMO_BONUS);
-                audit('demo_topup', { phone: normalizedPhone });
-                socket.emit('demo_bonus', { amount: DEMO_BONUS });
-            }
-        }
-
         const bal = await getBalance(normalizedPhone);
-        audit('auth', { phone: normalizedPhone, balance: bal });
-        socket.emit('auth_success', { balance: bal.toFixed(2) });
+        
+        // Check if demo bonus needed (low balance)
+        if (bal < ENTRY_FEE) {
+            await creditBalance(normalizedPhone, DEMO_BONUS);
+            audit('demo_topup', { phone: normalizedPhone });
+            socket.emit('demo_bonus', { amount: DEMO_BONUS });
+        }
+        
+        const updatedBal = await getBalance(normalizedPhone);
+        audit('auth_success', { phone: normalizedPhone, balance: updatedBal });
+        socket.emit('auth_success', { balance: updatedBal.toFixed(2) });
         broadcastOnlineCount();
-        console.log(`✅ Auth success: ${normalizedPhone} - Balance: ${bal}`);
+        console.log(`✅ Auth success: ${normalizedPhone} - Balance: ${updatedBal}`);
+    });
+
+    // ─── CHANGE PIN ───────────────────────────────────────────────────────
+    socket.on('change_pin', async ({ oldPin, newPin }) => {
+        if (!socket.authenticated || !socket.phone) {
+            return socket.emit('error_msg', 'Not authenticated.');
+        }
+        if (!validatePin(oldPin) || !validatePin(newPin)) {
+            return socket.emit('error_msg', 'PIN must be 4 digits.');
+        }
+        
+        const storedPin = await getUserPin(socket.phone);
+        const pinValid = await verifyPin(oldPin, storedPin);
+        if (!pinValid) {
+            return socket.emit('error_msg', 'Current PIN is incorrect.');
+        }
+        
+        await setUserPin(socket.phone, newPin);
+        audit('pin_changed', { phone: socket.phone });
+        socket.emit('pin_changed', {});
+        console.log(`🔐 PIN changed for: ${socket.phone}`);
     });
 
     // ─── CREATE PRIVATE ROOM ───────────────────────────────────────────────
     socket.on('create_private_room', async () => {
-        if (!socket.phone) return socket.emit('error_msg', 'Not authenticated.');
+        if (!socket.authenticated || !socket.phone) return socket.emit('error_msg', 'Not authenticated.');
         if (socket.searching) return socket.emit('error_msg', 'Already searching.');
         if (socket.currentRoom) return socket.emit('error_msg', 'Already in a room.');
         
@@ -326,7 +447,7 @@ io.on('connection', (socket) => {
 
     // ─── JOIN PRIVATE ROOM ─────────────────────────────────────────────────
     socket.on('join_private_room', async ({ roomCode }) => {
-        if (!socket.phone) return socket.emit('error_msg', 'Not authenticated.');
+        if (!socket.authenticated || !socket.phone) return socket.emit('error_msg', 'Not authenticated.');
         if (socket.searching) return socket.emit('error_msg', 'Already searching.');
         if (socket.currentRoom) return socket.emit('error_msg', 'Already in a room.');
         
@@ -378,7 +499,6 @@ io.on('connection', (socket) => {
         
         console.log(`✅ Player ${socket.phone} joined private room ${code}`);
         
-        // Notify both players
         socket.emit('private_match_found', {
             gameId,
             mySymbol: 'O',
@@ -398,6 +518,7 @@ io.on('connection', (socket) => {
 
     // ─── CANCEL PRIVATE ROOM ───────────────────────────────────────────────
     socket.on('cancel_private_room', async () => {
+        if (!socket.authenticated) return;
         const roomCode = socket.currentRoom;
         if (!roomCode) return;
         
@@ -417,14 +538,10 @@ io.on('connection', (socket) => {
     });
 
     socket.on('find_match', async () => {
-        console.log(`🎮 Find match request from: ${socket.phone} (socket: ${socket.id})`);
-        
-        if (!socket.phone) {
-            console.log(`❌ No phone number for socket ${socket.id}`);
+        if (!socket.authenticated || !socket.phone) {
             return socket.emit('error_msg', 'Not authenticated.');
         }
         if (socket.searching) {
-            console.log(`⚠️ ${socket.phone} is already searching`);
             return socket.emit('error_msg', 'Already searching.');
         }
         if (socket.currentRoom) {
@@ -438,7 +555,6 @@ io.on('connection', (socket) => {
 
         const deducted = await deductBalance(socket.phone, ENTRY_FEE);
         if (!deducted) {
-            console.log(`❌ ${socket.phone} has insufficient balance`);
             socket.searching = false;
             return socket.emit('error_msg', `Insufficient balance. Need KES ${ENTRY_FEE}.`);
         }
@@ -484,7 +600,7 @@ io.on('connection', (socket) => {
     });
 
     socket.on('cancel_search', async () => {
-        console.log(`❌ Cancel search from: ${socket.phone}`);
+        if (!socket.authenticated) return;
         if (!socket.searching) return;
         
         if (waitingSocket && waitingSocket.id === socket.id) {
@@ -523,7 +639,6 @@ io.on('connection', (socket) => {
     socket.on('disconnect', async () => {
         console.log(`🔌 Disconnect: ${socket.id} (${socket.phone || 'no phone'})`);
         
-        // Handle private room cleanup
         if (socket.currentRoom) {
             const room = privateRooms.get(socket.currentRoom);
             if (room && !room.gameStarted) {
@@ -533,15 +648,14 @@ io.on('connection', (socket) => {
         }
         
         if (waitingSocket && waitingSocket.id === socket.id) {
-            console.log(`🧹 Removed ${socket.phone} from waiting slot`);
             waitingSocket = null;
             if (socket.phone && socket.searching) {
                 await creditBalance(socket.phone, ENTRY_FEE);
-                console.log(`💰 Refunded ${ENTRY_FEE} to ${socket.phone} on disconnect`);
             }
         }
         
         socket.searching = false;
+        socket.authenticated = false;
 
         for (const [gameId, game] of games.entries()) {
             if (game.sockets.X === socket.id || game.sockets.O === socket.id) {
@@ -563,7 +677,6 @@ io.on('connection', (socket) => {
                 }
                 audit('game_forfeit', { gameId, winner: oppPhone });
                 games.delete(gameId);
-                console.log(`🏆 Game ${gameId} forfeited - Winner: ${oppPhone}`);
                 break;
             }
         }
@@ -571,7 +684,7 @@ io.on('connection', (socket) => {
     });
 
     socket.on('get_balance', async () => {
-        if (!socket.phone) return;
+        if (!socket.authenticated || !socket.phone) return;
         const bal = await getBalance(socket.phone);
         socket.emit('balance_update', { balance: bal.toFixed(2) });
     });
@@ -580,7 +693,6 @@ io.on('connection', (socket) => {
 async function finishGame(gameId, game, result) {
     games.delete(gameId);
     
-    // Clean up private room if applicable
     if (game.isPrivate && game.roomCode) {
         privateRooms.delete(game.roomCode);
         const sockets = io.sockets.sockets;
@@ -607,7 +719,6 @@ async function finishGame(gameId, game, result) {
         if (sO) sO.emit('balance_update', { balance: balO.toFixed(2) });
         audit('game_draw', { gameId });
         io.to(gameId).emit('game_finished', { result: 'DRAW', winner: null, winnerSocketId: null, refund: DRAW_REFUND });
-        console.log(`🤝 Game ${gameId} ended in draw`);
     } else {
         const winnerPhone    = game.players[result];
         const winnerSocketId = game.sockets[result];
@@ -616,7 +727,6 @@ async function finishGame(gameId, game, result) {
         if (winnerSocket) winnerSocket.emit('balance_update', { balance: newBal.toFixed(2) });
         audit('game_won', { gameId, winner: winnerPhone, prize: WIN_PRIZE });
         io.to(gameId).emit('game_finished', { result: 'WIN', winner: result, winnerSocketId, prize: WIN_PRIZE });
-        console.log(`🏆 Game ${gameId} won by ${winnerPhone} - Prize: ${WIN_PRIZE}`);
     }
     broadcastOnlineCount();
 }
@@ -626,7 +736,7 @@ async function start() {
         await redis.connect();
         console.log('✅ Redis connected');
     } catch(e) {
-        console.warn('⚠️ Redis unavailable — using in-memory balances only:', e.message);
+        console.warn('⚠️ Redis unavailable — using in-memory storage only:', e.message);
     }
     const PORT = process.env.PORT || 3000;
     server.listen(PORT, () => console.log(`🚀 TicTac Cash running on port ${PORT}`));
