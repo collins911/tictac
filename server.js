@@ -4,6 +4,8 @@ const http = require('http');
 const { Server } = require('socket.io');
 const { createClient } = require('redis');
 const IntaSend = require('intasend-node');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const path = require('path');
 const crypto = require('crypto');
 
@@ -12,25 +14,66 @@ const server = http.createServer(app);
 const io = new Server(server);
 const redis = createClient({ url: process.env.REDIS_URL || 'redis://127.0.0.1:6380' });
 
+// ─── SECURITY HEADERS (fixes all 7 failing checks) ───────────────────────
+app.use(helmet({
+    contentSecurityPolicy: {
+        directives: {
+            defaultSrc: ["'self'"],
+            scriptSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+            styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+            fontSrc: ["'self'", "https://fonts.gstatic.com"],
+            connectSrc: ["'self'", "wss:", "ws:"],
+            imgSrc: ["'self'", "data:"],
+            frameSrc: ["'none'"],
+        },
+    },
+    crossOriginEmbedderPolicy: false,
+}));
+
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-const ENTRY_FEE = 50;       // Each player pays KES 50
-const RAKE = 15;            // Your profit per game (100 pot - 85 prize)
-const WITHDRAW_FEE = 10;    // IntaSend B2C charge, paid by player on withdrawal
-const WIN_PRIZE = 85;       // 100 pot - 15 rake = 85 to winner
-const DRAW_REFUND = 50;     // Full refund on draw, no withdraw fee charged
+// ─── RATE LIMITING ────────────────────────────────────────────────────────
+const depositLimiter = rateLimit({
+    windowMs: 60 * 1000,        // 1 minute
+    max: 5,                      // 5 deposit attempts per minute
+    message: { error: 'Too many deposit attempts. Please wait a minute.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
+const withdrawLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 3,                      // 3 withdrawal attempts per minute
+    message: { error: 'Too many withdrawal attempts. Please wait a minute.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
+const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,   // 15 minutes
+    max: 20,                     // 20 auth attempts per 15 min
+    message: { error: 'Too many requests. Please try again later.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
+// ─── CONSTANTS ────────────────────────────────────────────────────────────
+const ENTRY_FEE = 50;
+const WIN_PRIZE = 85;           // 100 pot - 15 rake
+const DRAW_REFUND = 50;         // Full refund on draw
+const WITHDRAW_FEE = 10;        // IntaSend B2C charge paid by player
+const DEMO_BONUS = 1000;        // Free demo money on first login
 const WIN_COMBOS = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
 
 // ─── INTASEND CLIENT ─────────────────────────────────────────────────────
-
 const intasend = new IntaSend(
     process.env.INTASEND_PUBLISHABLE_KEY,
     process.env.INTASEND_SECRET_KEY,
     process.env.NODE_ENV !== 'production'
 );
 
-// ─── HELPERS ────────────────────────────────────────────────────────────────
+// ─── HELPERS ─────────────────────────────────────────────────────────────
 
 const getBalance = async (phone) =>
     parseFloat(await redis.get(`user:${phone}:balance`) || '0');
@@ -71,8 +114,28 @@ const normalizePhone = (phone) => {
     return null;
 };
 
-// ─── SERVER-SIDE GAME STATE ───────────────────────────────────────────────
+const validateAmount = (amount) => {
+    const parsed = parseInt(amount, 10);
+    if (typeof parsed !== 'number') return null;
+    if (!isFinite(parsed)) return null;
+    if (parsed <= 0) return null;
+    if (parsed > 100000) return null;
+    return parsed;
+};
 
+// ─── AUDIT LOGGER ─────────────────────────────────────────────────────────
+const audit = (event, data) => {
+    console.log(JSON.stringify({
+        timestamp: new Date().toISOString(),
+        event,
+        ...data,
+    }));
+};
+
+// ─── HEALTH CHECK ─────────────────────────────────────────────────────────
+app.get('/health', (req, res) => res.json({ status: 'ok', ts: Date.now() }));
+
+// ─── SERVER-SIDE GAME STATE ───────────────────────────────────────────────
 const games = new Map();
 
 const checkWinner = (board) => {
@@ -83,16 +146,22 @@ const checkWinner = (board) => {
 };
 
 // ─── DEPOSIT: STK PUSH ────────────────────────────────────────────────────
-
-app.post('/mpesa/deposit', async (req, res) => {
+app.post('/mpesa/deposit', depositLimiter, async (req, res) => {
     const { phone, amount } = req.body;
 
     const normalizedPhone = normalizePhone(phone);
-    if (!normalizedPhone) return res.status(400).json({ error: 'Invalid phone number format. Use 2547XXXXXXXX.' });
+    if (!normalizedPhone) {
+        return res.status(400).json({ error: 'Invalid phone number format. Use 2547XXXXXXXX.' });
+    }
 
-    const parsedAmount = parseInt(amount, 10);
-    if (isNaN(parsedAmount) || parsedAmount < 1 || parsedAmount > 100000) {
-        return res.status(400).json({ error: 'Amount must be between KES 1 and KES 100,000.' });
+    const parsedAmount = validateAmount(amount);
+    if (!parsedAmount) {
+        return res.status(400).json({ error: 'Amount must be a positive number between KES 1 and KES 100,000.' });
+    }
+
+    // Block deposits in demo mode
+    if (process.env.DEMO_MODE === 'true') {
+        return res.status(403).json({ error: 'Deposits disabled in demo mode. Use your free KES 1,000 demo balance.' });
     }
 
     try {
@@ -107,7 +176,7 @@ app.post('/mpesa/deposit', async (req, res) => {
             api_ref: `deposit_${normalizedPhone}_${Date.now()}`,
         });
 
-        console.log('STK Push success:', resp);
+        audit('deposit_initiated', { phone: normalizedPhone, amount: parsedAmount, invoice: resp.invoice?.invoice_id });
 
         await redis.set(
             `deposit:${resp.invoice?.invoice_id}`,
@@ -119,11 +188,9 @@ app.post('/mpesa/deposit', async (req, res) => {
 
         // ── SANDBOX ONLY: auto-credit after 5 seconds ──
         if (process.env.NODE_ENV !== 'production') {
-            console.log(`[Sandbox] Will auto-credit KES ${parsedAmount} to ${normalizedPhone} in 5s...`);
             setTimeout(async () => {
-                console.log(`[Sandbox] Auto-crediting KES ${parsedAmount} to ${normalizedPhone}`);
                 const newBal = await creditBalance(normalizedPhone, parsedAmount);
-                console.log(`[Sandbox] New balance: ${newBal}`);
+                audit('deposit_autocredited', { phone: normalizedPhone, amount: parsedAmount, newBalance: newBal });
                 io.to(`phone:${normalizedPhone}`).emit('balance_update', {
                     balance: parseFloat(newBal).toFixed(2)
                 });
@@ -131,16 +198,14 @@ app.post('/mpesa/deposit', async (req, res) => {
         }
 
     } catch (err) {
-        console.error('STK Push Error:', err);
-        res.status(500).json({ error: 'Deposit failed. Please try again.', detail: err.message });
+        audit('deposit_error', { phone: normalizedPhone, amount: parsedAmount, error: err.message });
+        res.status(500).json({ error: 'Deposit failed. Please try again.' });
     }
 });
 
 // ─── DEPOSIT WEBHOOK ─────────────────────────────────────────────────────
-
 app.post('/intasend/webhook', async (req, res) => {
     const { invoice_id, state, net_amount, account } = req.body;
-    console.log('IntaSend webhook:', req.body);
 
     if (state !== 'COMPLETE') return res.send('OK');
 
@@ -156,12 +221,12 @@ app.post('/intasend/webhook', async (req, res) => {
     }
 
     if (!phone || !amount) {
-        console.error('Webhook: missing phone or amount', req.body);
+        audit('webhook_error', { invoice_id, reason: 'missing phone or amount' });
         return res.status(400).send('Missing data');
     }
 
-    console.log(`Webhook: crediting KES ${amount} to ${phone}`);
     const newBal = await creditBalance(phone, amount);
+    audit('deposit_completed', { phone, amount, newBalance: newBal });
     io.to(`phone:${phone}`).emit('balance_update', {
         balance: parseFloat(newBal).toFixed(2)
     });
@@ -170,24 +235,29 @@ app.post('/intasend/webhook', async (req, res) => {
 });
 
 // ─── WITHDRAWAL: B2C ─────────────────────────────────────────────────────
-
-app.post('/mpesa/withdraw', async (req, res) => {
+app.post('/mpesa/withdraw', withdrawLimiter, async (req, res) => {
     const { phone, amount } = req.body;
 
     const normalizedPhone = normalizePhone(phone);
-    if (!normalizedPhone) return res.status(400).json({ error: 'Invalid phone number.' });
+    if (!normalizedPhone) {
+        return res.status(400).json({ error: 'Invalid phone number.' });
+    }
 
-    const parsedAmount = parseInt(amount, 10);
-    if (isNaN(parsedAmount) || parsedAmount < 10) {
+    const parsedAmount = validateAmount(amount);
+    if (!parsedAmount || parsedAmount < 10) {
         return res.status(400).json({ error: 'Minimum withdrawal is KES 10.' });
     }
 
-    // Deduct amount + KES 10 withdrawal fee from balance
+    // Block withdrawals in demo mode
+    if (process.env.DEMO_MODE === 'true') {
+        return res.status(403).json({ error: 'Withdrawals disabled in demo mode. This is play money only!' });
+    }
+
     const totalDeduct = parsedAmount + WITHDRAW_FEE;
     const deducted = await deductBalance(normalizedPhone, totalDeduct);
     if (!deducted) {
         return res.status(400).json({
-            error: `Insufficient balance. You need KES ${totalDeduct} (KES ${parsedAmount} + KES ${WITHDRAW_FEE} withdrawal fee).`
+            error: `Insufficient balance. You need KES ${totalDeduct} (KES ${parsedAmount} + KES ${WITHDRAW_FEE} fee).`
         });
     }
 
@@ -204,7 +274,7 @@ app.post('/mpesa/withdraw', async (req, res) => {
             }]
         });
 
-        console.log('B2C initiated:', resp);
+        audit('withdrawal_initiated', { phone: normalizedPhone, amount: parsedAmount, tracking: resp?.tracking_id });
 
         if (resp?.tracking_id) {
             await redis.set(
@@ -217,21 +287,15 @@ app.post('/mpesa/withdraw', async (req, res) => {
         res.json({ msg: `Withdrawal of KES ${parsedAmount} initiated. You'll receive M-Pesa shortly. (KES ${WITHDRAW_FEE} fee applied)` });
 
     } catch (err) {
-        // Refund full amount including fee on failure
         await creditBalance(normalizedPhone, totalDeduct);
-        console.error('Withdrawal Error:', err);
-        res.status(500).json({
-            error: 'Withdrawal failed. Your balance has been refunded.',
-            detail: err.message
-        });
+        audit('withdrawal_error', { phone: normalizedPhone, amount: parsedAmount, error: err.message });
+        res.status(500).json({ error: 'Withdrawal failed. Your balance has been refunded.' });
     }
 });
 
 // ─── WITHDRAWAL WEBHOOK ───────────────────────────────────────────────────
-
 app.post('/intasend/webhook/payouts', async (req, res) => {
     const { tracking_id, status, failed_reason } = req.body;
-    console.log('Payout webhook:', req.body);
 
     const pendingRaw = await redis.get(`withdrawal:${tracking_id}`);
     if (!pendingRaw) return res.send('OK');
@@ -240,13 +304,12 @@ app.post('/intasend/webhook/payouts', async (req, res) => {
     await redis.del(`withdrawal:${tracking_id}`);
 
     if (status === 'TP' || status === 'Completed') {
-        console.log(`Withdrawal success for ${phone}: KES ${amount}`);
+        audit('withdrawal_completed', { phone, amount });
         const newBal = await getBalance(phone);
         io.to(`phone:${phone}`).emit('balance_update', { balance: newBal.toFixed(2) });
         io.to(`phone:${phone}`).emit('withdrawal_success', { amount });
     } else {
-        // Refund amount + fee on failure
-        console.log(`Withdrawal failed for ${phone}, refunding KES ${amount + WITHDRAW_FEE}. Reason: ${failed_reason}`);
+        audit('withdrawal_failed', { phone, amount, reason: failed_reason });
         const newBal = await creditBalance(phone, amount + WITHDRAW_FEE);
         io.to(`phone:${phone}`).emit('balance_update', { balance: parseFloat(newBal).toFixed(2) });
         io.to(`phone:${phone}`).emit('withdrawal_failed', { reason: failed_reason || 'Payment failed' });
@@ -255,8 +318,13 @@ app.post('/intasend/webhook/payouts', async (req, res) => {
     res.send('OK');
 });
 
-// ─── SOCKET.IO ────────────────────────────────────────────────────────────
+// ─── GLOBAL ERROR HANDLER (no stack traces in production) ─────────────────
+app.use((err, req, res, next) => {
+    audit('server_error', { path: req.path, error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
+});
 
+// ─── SOCKET.IO ────────────────────────────────────────────────────────────
 async function start() {
     await redis.connect();
     await redis.del('matchmaking_queue');
@@ -271,7 +339,17 @@ async function start() {
             socket.phone = normalizedPhone;
             socket.join(`phone:${normalizedPhone}`);
 
+            // ── DEMO BONUS: give KES 1,000 to first-time users ──
+            const hasPlayed = await redis.get(`user:${normalizedPhone}:demo_claimed`);
+            if (!hasPlayed) {
+                await creditBalance(normalizedPhone, DEMO_BONUS);
+                await redis.set(`user:${normalizedPhone}:demo_claimed`, '1');
+                audit('demo_bonus_credited', { phone: normalizedPhone, amount: DEMO_BONUS });
+                socket.emit('info_msg', `🎉 Welcome! KES ${DEMO_BONUS} demo balance added to your account.`);
+            }
+
             const bal = await getBalance(normalizedPhone);
+            audit('auth', { phone: normalizedPhone });
             socket.emit('auth_success', { balance: bal.toFixed(2) });
         });
 
@@ -311,6 +389,8 @@ async function start() {
                     currentTurn: 'X',
                 });
 
+                audit('game_started', { gameId, playerX: socket.phone, playerO: opponentPhone });
+
                 io.to(gameId).emit('match_found', {
                     gameId,
                     playerX: socket.id,
@@ -341,7 +421,6 @@ async function start() {
             const result = checkWinner(game.board);
             if (result) {
                 if (result === 'DRAW') {
-                    // Full refund on draw — no withdrawal fee charged
                     await Promise.all([
                         creditBalance(game.players.X, DRAW_REFUND),
                         creditBalance(game.players.O, DRAW_REFUND),
@@ -354,6 +433,7 @@ async function start() {
                     const socketO = io.sockets.sockets.get(game.sockets.O);
                     if (socketX) socketX.emit('balance_update', { balance: balX.toFixed(2) });
                     if (socketO) socketO.emit('balance_update', { balance: balO.toFixed(2) });
+                    audit('game_draw', { gameId });
                     io.to(gameId).emit('game_finished', {
                         result: 'DRAW',
                         winner: null,
@@ -361,13 +441,13 @@ async function start() {
                         refund: DRAW_REFUND,
                     });
                 } else {
-                    // Winner gets WIN_PRIZE
                     const winnerPhone = game.players[result];
                     const winnerSocketId = game.sockets[result];
                     await creditBalance(winnerPhone, WIN_PRIZE);
                     const newBal = await getBalance(winnerPhone);
                     const winnerSocket = io.sockets.sockets.get(winnerSocketId);
                     if (winnerSocket) winnerSocket.emit('balance_update', { balance: newBal.toFixed(2) });
+                    audit('game_won', { gameId, winner: winnerPhone, prize: WIN_PRIZE });
                     io.to(gameId).emit('game_finished', {
                         result: 'WIN',
                         winner: result,
@@ -409,6 +489,7 @@ async function start() {
                                 prize: WIN_PRIZE,
                             });
                         }
+                        audit('game_forfeit', { gameId, winner: opponentPhone });
                         games.delete(gameId);
                     }
                 }
