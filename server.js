@@ -28,6 +28,7 @@ redis.on('connect', () => console.log('Redis connected'));
 let   waitingSocket = null;          // single socket waiting for opponent
 const games         = new Map();     // gameId -> game object
 const balances      = new Map();     // phone  -> balance (fallback if Redis down)
+const privateRooms  = new Map();     // roomCode -> { creator, createdAt, players }
 
 // ─── SECURITY ────────────────────────────────────────────────────────────
 app.use(helmet({
@@ -82,6 +83,11 @@ const validateAmount = (amount) => {
     const p = parseInt(amount, 10);
     if (!isFinite(p) || p <= 0 || p > 100000) return null;
     return p;
+};
+
+// Generate a short room code
+const generateRoomCode = () => {
+    return crypto.randomBytes(3).toString('hex').toUpperCase();
 };
 
 // ─── BALANCE (Redis with in-memory fallback) ──────────────────────────────
@@ -139,7 +145,7 @@ const broadcastOnlineCount = () => {
     io.emit('online_count', { online, searching });
 };
 
-// ─── PERIODIC CLEANUP OF STALE WAITING SOCKET ─────────────────────────────
+// ─── PERIODIC CLEANUP ─────────────────────────────────────────────────────
 setInterval(() => {
     if (waitingSocket) {
         const stillConnected = io.sockets.sockets.has(waitingSocket.id);
@@ -153,10 +159,34 @@ setInterval(() => {
             broadcastOnlineCount();
         }
     }
+    
+    // Clean up old private rooms (older than 1 hour)
+    const now = Date.now();
+    for (const [code, room] of privateRooms.entries()) {
+        if (now - room.createdAt > 3600000) { // 1 hour
+            privateRooms.delete(code);
+            console.log(`🧹 Cleaned up old private room: ${code}`);
+        }
+    }
 }, 5000);
 
 // ─── HEALTH CHECK ─────────────────────────────────────────────────────────
 app.get('/health', (req, res) => res.json({ status: 'ok', ts: Date.now(), redis: redis.isReady }));
+
+// ─── GET ROOM INFO ────────────────────────────────────────────────────────
+app.get('/api/room/:code', (req, res) => {
+    const { code } = req.params;
+    const room = privateRooms.get(code.toUpperCase());
+    if (room) {
+        res.json({ 
+            exists: true, 
+            creator: room.creator,
+            playerJoined: !!room.playerSocket 
+        });
+    } else {
+        res.json({ exists: false });
+    }
+});
 
 // ─── DEPOSIT ─────────────────────────────────────────────────────────────
 app.post('/mpesa/deposit', depositLimiter, async (req, res) => {
@@ -224,6 +254,7 @@ const checkWinner = (board) => {
 // ─── SOCKET EVENTS ────────────────────────────────────────────────────────
 io.on('connection', (socket) => {
     socket.searching = false;
+    socket.currentRoom = null;
     console.log(`🔌 New connection: ${socket.id}`);
     broadcastOnlineCount();
 
@@ -259,6 +290,132 @@ io.on('connection', (socket) => {
         console.log(`✅ Auth success: ${normalizedPhone} - Balance: ${bal}`);
     });
 
+    // ─── CREATE PRIVATE ROOM ───────────────────────────────────────────────
+    socket.on('create_private_room', async () => {
+        if (!socket.phone) return socket.emit('error_msg', 'Not authenticated.');
+        if (socket.searching) return socket.emit('error_msg', 'Already searching.');
+        if (socket.currentRoom) return socket.emit('error_msg', 'Already in a room.');
+        
+        const deducted = await deductBalance(socket.phone, ENTRY_FEE);
+        if (!deducted) {
+            return socket.emit('error_msg', `Insufficient balance. Need KES ${ENTRY_FEE}.`);
+        }
+        
+        const newBal = await getBalance(socket.phone);
+        socket.emit('balance_update', { balance: newBal.toFixed(2) });
+        
+        const roomCode = generateRoomCode();
+        const room = {
+            code: roomCode,
+            creator: socket.phone,
+            creatorSocket: socket.id,
+            playerSocket: null,
+            playerPhone: null,
+            createdAt: Date.now(),
+            gameStarted: false
+        };
+        
+        privateRooms.set(roomCode, room);
+        socket.currentRoom = roomCode;
+        socket.join(`room:${roomCode}`);
+        
+        console.log(`🏠 Private room created: ${roomCode} by ${socket.phone}`);
+        socket.emit('room_created', { roomCode, balance: newBal.toFixed(2) });
+        socket.emit('waiting_for_opponent', { roomCode });
+    });
+
+    // ─── JOIN PRIVATE ROOM ─────────────────────────────────────────────────
+    socket.on('join_private_room', async ({ roomCode }) => {
+        if (!socket.phone) return socket.emit('error_msg', 'Not authenticated.');
+        if (socket.searching) return socket.emit('error_msg', 'Already searching.');
+        if (socket.currentRoom) return socket.emit('error_msg', 'Already in a room.');
+        
+        const code = roomCode.toUpperCase();
+        const room = privateRooms.get(code);
+        
+        if (!room) {
+            return socket.emit('room_error', { error: 'Room not found or expired.' });
+        }
+        
+        if (room.gameStarted) {
+            return socket.emit('room_error', { error: 'Game already in progress.' });
+        }
+        
+        if (room.playerSocket) {
+            return socket.emit('room_error', { error: 'Room is full.' });
+        }
+        
+        if (room.creator === socket.phone) {
+            return socket.emit('room_error', { error: 'Cannot join your own room.' });
+        }
+        
+        const deducted = await deductBalance(socket.phone, ENTRY_FEE);
+        if (!deducted) {
+            return socket.emit('error_msg', `Insufficient balance. Need KES ${ENTRY_FEE}.`);
+        }
+        
+        const newBal = await getBalance(socket.phone);
+        socket.emit('balance_update', { balance: newBal.toFixed(2) });
+        
+        room.playerSocket = socket.id;
+        room.playerPhone = socket.phone;
+        room.gameStarted = true;
+        socket.currentRoom = code;
+        socket.join(`room:${code}`);
+        
+        const creatorSocket = io.sockets.sockets.get(room.creatorSocket);
+        
+        const gameId = `private_${code}_${Date.now()}`;
+        const game = {
+            board: Array(9).fill(null),
+            players: { X: room.creator, O: socket.phone },
+            sockets: { X: room.creatorSocket, O: socket.id },
+            currentTurn: 'X',
+            isPrivate: true,
+            roomCode: code
+        };
+        games.set(gameId, game);
+        
+        console.log(`✅ Player ${socket.phone} joined private room ${code}`);
+        
+        // Notify both players
+        socket.emit('private_match_found', {
+            gameId,
+            mySymbol: 'O',
+            opponent: room.creator
+        });
+        
+        if (creatorSocket) {
+            creatorSocket.emit('private_match_found', {
+                gameId,
+                mySymbol: 'X',
+                opponent: socket.phone
+            });
+        }
+        
+        audit('private_game_started', { roomCode: code, playerX: room.creator, playerO: socket.phone });
+    });
+
+    // ─── CANCEL PRIVATE ROOM ───────────────────────────────────────────────
+    socket.on('cancel_private_room', async () => {
+        const roomCode = socket.currentRoom;
+        if (!roomCode) return;
+        
+        const room = privateRooms.get(roomCode);
+        if (room && room.creatorSocket === socket.id && !room.gameStarted) {
+            privateRooms.delete(roomCode);
+            socket.currentRoom = null;
+            socket.leave(`room:${roomCode}`);
+            
+            await creditBalance(socket.phone, ENTRY_FEE);
+            const bal = await getBalance(socket.phone);
+            socket.emit('balance_update', { balance: bal.toFixed(2) });
+            socket.emit('room_cancelled', {});
+            
+            console.log(`❌ Private room ${roomCode} cancelled`);
+        }
+    });
+
     socket.on('find_match', async () => {
         console.log(`🎮 Find match request from: ${socket.phone} (socket: ${socket.id})`);
         
@@ -269,6 +426,9 @@ io.on('connection', (socket) => {
         if (socket.searching) {
             console.log(`⚠️ ${socket.phone} is already searching`);
             return socket.emit('error_msg', 'Already searching.');
+        }
+        if (socket.currentRoom) {
+            return socket.emit('error_msg', 'Leave current room first.');
         }
         
         socket.searching = true;
@@ -302,6 +462,7 @@ io.on('connection', (socket) => {
                 players: { X: socket.phone,  O: opponent.phone },
                 sockets: { X: socket.id,     O: opponent.id    },
                 currentTurn: 'X',
+                isPrivate: false
             };
             games.set(gameId, game);
             
@@ -362,6 +523,15 @@ io.on('connection', (socket) => {
     socket.on('disconnect', async () => {
         console.log(`🔌 Disconnect: ${socket.id} (${socket.phone || 'no phone'})`);
         
+        // Handle private room cleanup
+        if (socket.currentRoom) {
+            const room = privateRooms.get(socket.currentRoom);
+            if (room && !room.gameStarted) {
+                privateRooms.delete(socket.currentRoom);
+                console.log(`🧹 Cleaned up private room: ${socket.currentRoom}`);
+            }
+        }
+        
         if (waitingSocket && waitingSocket.id === socket.id) {
             console.log(`🧹 Removed ${socket.phone} from waiting slot`);
             waitingSocket = null;
@@ -384,6 +554,7 @@ io.on('connection', (socket) => {
                 const newBal = await creditBalance(oppPhone, WIN_PRIZE);
                 if (oppSocket) {
                     oppSocket.searching = false;
+                    oppSocket.currentRoom = null;
                     oppSocket.emit('balance_update', { balance: newBal.toFixed(2) });
                     oppSocket.emit('game_finished', {
                         result: 'FORFEIT', winner: oppSymbol,
@@ -408,6 +579,19 @@ io.on('connection', (socket) => {
 
 async function finishGame(gameId, game, result) {
     games.delete(gameId);
+    
+    // Clean up private room if applicable
+    if (game.isPrivate && game.roomCode) {
+        privateRooms.delete(game.roomCode);
+        const sockets = io.sockets.sockets;
+        for (const [id, sock] of sockets) {
+            if (sock.currentRoom === game.roomCode) {
+                sock.currentRoom = null;
+                sock.leave(`room:${game.roomCode}`);
+            }
+        }
+    }
+    
     if (result === 'DRAW') {
         await Promise.all([
             creditBalance(game.players.X, DRAW_REFUND),

@@ -180,6 +180,11 @@
             width: auto;
         }
 
+        .btn-success {
+            background: var(--green);
+            color: #000;
+        }
+
         .wallet-header {
             display: flex;
             justify-content: space-between;
@@ -226,6 +231,174 @@
         #status.active { color: var(--green); border-color: var(--green); }
         #status.warn { color: var(--gold); border-color: rgba(255,215,0,0.3); }
         #status.error { color: var(--red); border-color: rgba(255,69,96,0.3); }
+
+        /* Invite Panel */
+        .invite-panel {
+            width: 100%;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .invite-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            background: var(--surface2);
+            border-bottom: 1px solid var(--border);
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .invite-header:hover {
+            background: rgba(0, 255, 136, 0.05);
+        }
+
+        .invite-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.7rem;
+            letter-spacing: 2px;
+            color: var(--green);
+            text-transform: uppercase;
+        }
+
+        .invite-toggle {
+            color: var(--muted);
+            font-size: 0.8rem;
+            transition: transform 0.3s;
+        }
+
+        .invite-toggle.open { transform: rotate(180deg); }
+
+        .invite-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+        }
+
+        .invite-content.open {
+            max-height: 500px;
+        }
+
+        .invite-body {
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .room-code-display {
+            background: var(--surface2);
+            border: 1px solid var(--green-glow);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .room-code-label {
+            font-size: 0.6rem;
+            letter-spacing: 3px;
+            color: var(--muted);
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+
+        .room-code {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 3.5rem;
+            letter-spacing: 8px;
+            color: var(--green);
+            text-shadow: 0 0 20px var(--green-glow);
+            margin-bottom: 16px;
+        }
+
+        .invite-link-container {
+            display: flex;
+            gap: 8px;
+        }
+
+        .invite-link-input {
+            flex: 1;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px 12px;
+            color: var(--text);
+            font-family: 'DM Mono', monospace;
+            font-size: 0.7rem;
+            text-align: center;
+        }
+
+        .share-buttons {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            margin-top: 12px;
+        }
+
+        .share-btn {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 10px 16px;
+            border-radius: 8px;
+            font-size: 0.65rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .share-btn:hover {
+            border-color: var(--green);
+            color: var(--green);
+        }
+
+        .join-room-section {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .join-input-group {
+            display: flex;
+            gap: 8px;
+        }
+
+        .join-input {
+            flex: 1;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px;
+            color: var(--green);
+            font-family: 'DM Mono', monospace;
+            font-size: 1.2rem;
+            text-align: center;
+            text-transform: uppercase;
+            letter-spacing: 4px;
+        }
+
+        .waiting-room {
+            text-align: center;
+            padding: 20px;
+        }
+
+        .waiting-animation {
+            font-size: 2rem;
+            margin-bottom: 16px;
+        }
+
+        .waiting-text {
+            font-size: 0.8rem;
+            color: var(--muted);
+            letter-spacing: 2px;
+        }
 
         /* Game History Panel */
         .history-panel {
@@ -585,6 +758,64 @@
         </div>
     </div>
 
+    <!-- INVITE FRIEND PANEL -->
+    <div class="invite-panel" id="invite-panel">
+        <div class="invite-header" id="invite-toggle">
+            <div class="invite-title">
+                <span>👥 INVITE FRIEND</span>
+            </div>
+            <span class="invite-toggle" id="invite-toggle-icon">▼</span>
+        </div>
+        <div class="invite-content" id="invite-content">
+            <div class="invite-body" id="invite-body">
+                <!-- Default: Show options -->
+                <div id="invite-options">
+                    <button class="btn btn-primary" id="create-room-btn" style="margin-bottom: 12px;">
+                        🏠 Create Private Room — KES 50
+                    </button>
+                    
+                    <div class="join-room-section">
+                        <label style="font-size: 0.65rem; letter-spacing: 2px; color: var(--muted);">Join with Code</label>
+                        <div class="join-input-group">
+                            <input type="text" id="room-code-input" class="join-input" placeholder="ENTER CODE" maxlength="6" style="text-transform: uppercase;">
+                            <button class="btn btn-success" id="join-room-btn" style="width: auto; padding: 12px 20px;">Join</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Room created view (hidden by default) -->
+                <div id="room-created-view" class="hidden">
+                    <div class="room-code-display">
+                        <div class="room-code-label">Share this code</div>
+                        <div class="room-code" id="display-room-code">ABC123</div>
+                        <div class="invite-link-container">
+                            <input type="text" id="invite-link" class="invite-link-input" readonly>
+                            <button class="btn btn-outline btn-small" id="copy-code-btn" style="width: auto;">📋 Copy</button>
+                        </div>
+                        <div class="share-buttons">
+                            <button class="share-btn" id="share-whatsapp">
+                                <span>📱</span> WhatsApp
+                            </button>
+                            <button class="share-btn" id="share-sms">
+                                <span>💬</span> SMS
+                            </button>
+                            <button class="share-btn" id="share-clipboard">
+                                <span>🔗</span> Copy Link
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="waiting-room">
+                        <div class="waiting-animation">⏳</div>
+                        <div class="waiting-text">Waiting for opponent to join...</div>
+                    </div>
+                    
+                    <button class="btn btn-danger" id="cancel-room-btn">Cancel Room</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- GAME HISTORY PANEL -->
     <div class="history-panel">
         <div class="history-header" id="history-toggle">
@@ -596,7 +827,7 @@
                     <span class="stat-draw" id="stat-draws">0D</span>
                 </span>
             </div>
-            <span class="history-toggle" id="toggle-icon">▼</span>
+            <span class="history-toggle" id="history-toggle-icon">▼</span>
         </div>
         <div class="history-content" id="history-content">
             <div class="history-list" id="history-list">
@@ -700,6 +931,11 @@
         // Game history storage
         let gameHistory = [];
         const HISTORY_STORAGE_KEY = 'tictac_history';
+        
+        // Invite system variables
+        let currentRoomCode = null;
+        let waitingForOpponent = false;
+        const BASE_URL = window.location.origin;
 
         // --- DOM ELEMENTS ---
         const $ = id => document.getElementById(id);
@@ -716,6 +952,63 @@
         const logoutBtn   = $('logout-btn');
         const depositBtn  = $('deposit-btn');
         const withdrawBtn = $('withdraw-btn');
+
+        // --- INVITE FUNCTIONS ---
+        function generateInviteLink(roomCode) {
+            return `${BASE_URL}?room=${roomCode}`;
+        }
+
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                showToast('Copied to clipboard!', 'success');
+            }).catch(() => {
+                const input = document.createElement('input');
+                input.value = text;
+                document.body.appendChild(input);
+                input.select();
+                document.execCommand('copy');
+                document.body.removeChild(input);
+                showToast('Copied!', 'success');
+            });
+        }
+
+        function shareViaWhatsApp(text) {
+            const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
+            window.open(url, '_blank');
+        }
+
+        function shareViaSMS(text) {
+            const url = `sms:?body=${encodeURIComponent(text)}`;
+            window.open(url, '_blank');
+        }
+
+        function createPrivateRoom() {
+            if (!myPhone) return showToast('Not authenticated', 'fail');
+            if (!socket?.connected) return showToast('Not connected', 'fail');
+            
+            socket.emit('create_private_room');
+            showToast('Creating private room...', '');
+        }
+
+        function joinPrivateRoom() {
+            const roomCode = $('room-code-input').value.trim().toUpperCase();
+            if (!roomCode) return showToast('Enter a room code', 'fail');
+            if (roomCode.length < 4) return showToast('Invalid room code', 'fail');
+            
+            socket.emit('join_private_room', { roomCode });
+            showToast('Joining room...', '');
+        }
+
+        function cancelPrivateRoom() {
+            socket.emit('cancel_private_room');
+        }
+
+        function resetInviteView() {
+            $('invite-options').classList.remove('hidden');
+            $('room-created-view').classList.add('hidden');
+            currentRoomCode = null;
+            waitingForOpponent = false;
+        }
 
         // --- HISTORY FUNCTIONS ---
         function loadHistory() {
@@ -744,13 +1037,12 @@
             const game = {
                 id: Date.now() + '-' + Math.random().toString(36).substr(2, 6),
                 timestamp: new Date().toISOString(),
-                result: result, // 'win', 'loss', 'draw'
+                result: result,
                 amount: amount,
                 opponent: 'Player'
             };
-            gameHistory.unshift(game); // Add to beginning
+            gameHistory.unshift(game);
             
-            // Keep only last 50 games
             if (gameHistory.length > 50) {
                 gameHistory = gameHistory.slice(0, 50);
             }
@@ -770,7 +1062,6 @@
             const statLosses = $('stat-losses');
             const statDraws = $('stat-draws');
             
-            // Calculate stats
             const wins = gameHistory.filter(g => g.result === 'win').length;
             const losses = gameHistory.filter(g => g.result === 'loss').length;
             const draws = gameHistory.filter(g => g.result === 'draw').length;
@@ -784,7 +1075,6 @@
                 return;
             }
             
-            // Build history HTML
             historyList.innerHTML = gameHistory.slice(0, 10).map(game => {
                 const time = new Date(game.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                 const date = new Date(game.timestamp).toLocaleDateString([], { month: 'short', day: 'numeric' });
@@ -843,6 +1133,15 @@
                     console.log('🔄 Re-authenticating with phone:', myPhone);
                     socket.emit('auth', { phone: myPhone });
                 }
+                
+                // Check for room code in URL
+                const urlParams = new URLSearchParams(window.location.search);
+                const roomCode = urlParams.get('room');
+                if (roomCode && authCompleted) {
+                    $('room-code-input').value = roomCode;
+                    $('invite-content').classList.add('open');
+                    $('invite-toggle-icon').classList.add('open');
+                }
             });
 
             socket.on('disconnect', (reason) => {
@@ -868,6 +1167,17 @@
                 gameScreen.classList.remove('hidden');
                 setStatus('Ready to play', '');
                 loadHistory();
+                
+                // Check for room code in URL after auth
+                const urlParams = new URLSearchParams(window.location.search);
+                const roomCode = urlParams.get('room');
+                if (roomCode) {
+                    $('room-code-input').value = roomCode;
+                    setTimeout(() => {
+                        $('invite-content').classList.add('open');
+                        $('invite-toggle-icon').classList.add('open');
+                    }, 500);
+                }
             });
 
             socket.on('balance_update', ({ balance }) => {
@@ -878,6 +1188,68 @@
             socket.on('online_count', ({ online, searching }) => {
                 $('online-count').textContent = online;
                 $('searching-count').textContent = searching;
+            });
+
+            // Invite system events
+            socket.on('room_created', ({ roomCode, balance }) => {
+                currentRoomCode = roomCode;
+                waitingForOpponent = true;
+                
+                $('invite-options').classList.add('hidden');
+                $('room-created-view').classList.remove('hidden');
+                $('display-room-code').textContent = roomCode;
+                
+                const inviteLink = generateInviteLink(roomCode);
+                $('invite-link').value = inviteLink;
+                
+                updateBalance(balance);
+                showToast(`Room created! Code: ${roomCode}`, 'success');
+            });
+
+            socket.on('waiting_for_opponent', ({ roomCode }) => {
+                setStatus('Waiting for opponent to join...', 'active');
+            });
+
+            socket.on('private_match_found', ({ gameId: gId, mySymbol: symbol, opponent }) => {
+                waitingForOpponent = false;
+                resetInviteView();
+                $('invite-content').classList.remove('open');
+                $('invite-toggle-icon').classList.remove('open');
+                
+                gameId = gId;
+                mySymbol = symbol;
+                currentTurn = 'X';
+                board = Array(9).fill(null);
+                gameActive = true;
+
+                if (mySymbol === 'X') {
+                    $('indicator-x').querySelector('span:last-child').textContent = 'YOU';
+                    $('indicator-o').querySelector('span:first-child').textContent = 'OPP';
+                } else {
+                    $('indicator-x').querySelector('span:last-child').textContent = 'OPP';
+                    $('indicator-o').querySelector('span:first-child').textContent = 'YOU';
+                }
+
+                initBoard();
+                boardWrap.classList.remove('hidden');
+                playBtn.classList.add('hidden');
+                cancelBtn.classList.add('hidden');
+                updateTurnIndicators();
+                showToast(`Game starting against ${opponent}!`, 'success');
+                setStatus(mySymbol === 'X' ? 'Your turn' : "Opponent's turn...", mySymbol === 'X' ? 'active' : '');
+            });
+
+            socket.on('room_error', ({ error }) => {
+                showToast(error, 'fail');
+                resetInviteView();
+            });
+
+            socket.on('room_cancelled', () => {
+                resetInviteView();
+                $('invite-content').classList.remove('open');
+                $('invite-toggle-icon').classList.remove('open');
+                setStatus('Ready to play', '');
+                showToast('Room cancelled — KES 50 refunded', 'warn');
             });
 
             socket.on('waiting', () => {
@@ -964,6 +1336,7 @@
                     playBtn.disabled = false;
                     setStatus('Ready to play', '');
                 }
+                resetInviteView();
             });
 
             socket.on('info_msg', msg => {
@@ -1058,6 +1431,7 @@
             $('indicator-x').classList.remove('active-turn');
             $('indicator-o').classList.remove('active-turn');
             setStatus('Ready to play', '');
+            resetInviteView();
         }
 
         function setStatus(msg, type = '', searching = false) {
@@ -1107,6 +1481,7 @@
             myPhone = null;
             gameActive = false;
             authCompleted = false;
+            currentRoomCode = null;
             gameScreen.classList.add('hidden');
             loginScreen.classList.remove('hidden');
             setTimeout(() => initSocket(), 100);
@@ -1134,6 +1509,20 @@
 
         function cancelSearch() {
             socket.emit('cancel_search');
+        }
+
+        function toggleInvite() {
+            const content = $('invite-content');
+            const icon = $('invite-toggle-icon');
+            content.classList.toggle('open');
+            icon.classList.toggle('open');
+        }
+
+        function toggleHistory() {
+            const content = $('history-content');
+            const icon = $('history-toggle-icon');
+            content.classList.toggle('open');
+            icon.classList.toggle('open');
         }
 
         // --- MODAL HANDLERS ---
@@ -1190,14 +1579,6 @@
             }
         }
 
-        // --- HISTORY TOGGLE ---
-        function toggleHistory() {
-            const content = $('history-content');
-            const icon = $('toggle-icon');
-            content.classList.toggle('open');
-            icon.classList.toggle('open');
-        }
-
         // --- INITIALIZE ---
         function bindEvents() {
             loginBtn.addEventListener('click', login);
@@ -1212,12 +1593,38 @@
             $('submit-withdraw').addEventListener('click', submitWithdraw);
             $('cancel-withdraw').addEventListener('click', hideWithdrawModal);
             $('dismiss-result').addEventListener('click', dismissResult);
+            
             $('history-toggle').addEventListener('click', toggleHistory);
             $('clear-history').addEventListener('click', clearHistory);
+            
+            $('invite-toggle').addEventListener('click', toggleInvite);
+            $('create-room-btn').addEventListener('click', createPrivateRoom);
+            $('join-room-btn').addEventListener('click', joinPrivateRoom);
+            $('cancel-room-btn').addEventListener('click', cancelPrivateRoom);
+            
+            $('copy-code-btn').addEventListener('click', () => {
+                copyToClipboard(currentRoomCode);
+            });
+            
+            $('share-whatsapp').addEventListener('click', () => {
+                const link = generateInviteLink(currentRoomCode);
+                shareViaWhatsApp(`Join me for a game of TicTac Cash! Use code: ${currentRoomCode} or click: ${link}`);
+            });
+            
+            $('share-sms').addEventListener('click', () => {
+                const link = generateInviteLink(currentRoomCode);
+                shareViaSMS(`Join me for TicTac Cash! Code: ${currentRoomCode} - ${link}`);
+            });
+            
+            $('share-clipboard').addEventListener('click', () => {
+                const link = generateInviteLink(currentRoomCode);
+                copyToClipboard(link);
+            });
             
             $('phone-input').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
             $('deposit-amount').addEventListener('keydown', e => { if (e.key === 'Enter') submitDeposit(); });
             $('withdraw-amount').addEventListener('keydown', e => { if (e.key === 'Enter') submitWithdraw(); });
+            $('room-code-input').addEventListener('keydown', e => { if (e.key === 'Enter') joinPrivateRoom(); });
             
             console.log('✅ All event listeners bound');
         }
