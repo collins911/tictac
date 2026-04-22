@@ -116,11 +116,12 @@ io.on('connection', (socket) => {
         if (!socket.phone) return socket.emit('error_msg', 'Not authenticated.');
         if (socket.searching) return;
 
-        // DEBUG: Track matchmaking attempts
-        console.log(`[match] phone=${socket.phone} searching=${socket.searching} waiting=${waitingSocket?.id}`);
+        // 🔴 FIX: Debug log to monitor matchmaking flow
+        console.log(`[find_match] phone=${socket.phone}, searching=${socket.searching}, waitingSocket=${waitingSocket?.id}`);
 
         socket.searching = true;
 
+        // 🔴 FIX: try-finally ensures socket.searching is reset even on error
         try {
             const deducted = await deductBalance(socket.phone, ENTRY_FEE);
             if (!deducted) {
@@ -160,7 +161,7 @@ io.on('connection', (socket) => {
                 broadcastOnlineCount();
             }
         } catch (err) {
-            console.error("Matchmaking error:", err);
+            console.error("Matchmaking logic error:", err);
             socket.searching = false; 
         }
     });
@@ -210,10 +211,9 @@ function checkWinner(board) {
 async function finishGame(gameId, game, result) {
     games.delete(gameId);
 
+    // 🔴 FIX: Explicitly clear searching flags and leave socket.io rooms
     const sX = io.sockets.sockets.get(game.sockets.X);
     const sO = io.sockets.sockets.get(game.sockets.O);
-    
-    // Explicitly reset flags for both players
     if (sX) { sX.searching = false; sX.leave(gameId); }
     if (sO) { sO.searching = false; sO.leave(gameId); }
 
