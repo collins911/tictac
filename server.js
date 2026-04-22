@@ -106,9 +106,12 @@ const creditBalance = async (phone, amount) => {
 
 const normalizePhone = (phone) => {
     const cleaned = String(phone).replace(/\D/g, '');
-    if (/^2547\d{8}$/.test(cleaned)) return cleaned;
-    if (/^07\d{8}$/.test(cleaned)) return '254' + cleaned.slice(1);
-    if (/^7\d{8}$/.test(cleaned)) return '254' + cleaned;
+    // Full 254 format — any Kenyan carrier (Safaricom 2547xx, Airtel 2547x/2541x, Telkom 2547x/2540x)
+    if (/^254\d{9}$/.test(cleaned)) return cleaned;
+    // Local 0xx format
+    if (/^0\d{9}$/.test(cleaned)) return '254' + cleaned.slice(1);
+    // Without leading 0 or 254
+    if (/^\d{9}$/.test(cleaned)) return '254' + cleaned;
     return null;
 };
 
@@ -330,7 +333,10 @@ async function start() {
         // ── AUTH ──────────────────────────────────────────────────────────
         socket.on('auth', async ({ phone }) => {
             const normalizedPhone = normalizePhone(phone);
-            if (!normalizedPhone) return socket.emit('error_msg', 'Invalid phone number.');
+            if (!normalizedPhone) {
+                audit('auth_rejected', { phone, reason: 'invalid_format' });
+                return socket.emit('error_msg', 'Invalid phone number. Use format: 07XXXXXXXX or 2547XXXXXXXX');
+            }
 
             socket.phone = normalizedPhone;
             socket.join(`phone:${normalizedPhone}`);
@@ -341,6 +347,14 @@ async function start() {
                 await redis.set(`user:${normalizedPhone}:demo_claimed`, '1');
                 audit('demo_bonus_credited', { phone: normalizedPhone, amount: DEMO_BONUS });
                 socket.emit('demo_bonus', { amount: DEMO_BONUS });
+            } else {
+                // Top up if balance is too low to play (helps returning testers)
+                const currentBal = await getBalance(normalizedPhone);
+                if (currentBal < ENTRY_FEE) {
+                    await creditBalance(normalizedPhone, DEMO_BONUS);
+                    audit('demo_topup', { phone: normalizedPhone, amount: DEMO_BONUS });
+                    socket.emit('demo_bonus', { amount: DEMO_BONUS });
+                }
             }
 
             const bal = await getBalance(normalizedPhone);
