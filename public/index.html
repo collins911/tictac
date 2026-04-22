@@ -52,19 +52,19 @@
             position: relative;
             z-index: 1;
             width: 100%;
-            max-width: 460px;
+            max-width: 500px;
             padding: 20px;
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 20px;
+            gap: 16px;
         }
 
         .hidden { display: none !important; }
 
         .logo {
             font-family: 'Bebas Neue', sans-serif;
-            font-size: 4rem;
+            font-size: 3.5rem;
             letter-spacing: 6px;
             color: var(--green);
             text-shadow: 0 0 30px var(--green-glow), 0 0 60px rgba(0,255,136,0.1);
@@ -97,7 +97,7 @@
             background: var(--surface);
             border: 1px solid var(--border);
             border-radius: 16px;
-            padding: 24px;
+            padding: 20px;
         }
 
         .input-group {
@@ -132,11 +132,11 @@
 
         .btn {
             width: 100%;
-            padding: 16px;
+            padding: 14px;
             border: none;
             border-radius: 10px;
             font-family: 'Bebas Neue', sans-serif;
-            font-size: 1.2rem;
+            font-size: 1.1rem;
             letter-spacing: 3px;
             cursor: pointer;
             transition: transform 0.15s, box-shadow 0.15s, opacity 0.2s;
@@ -174,6 +174,12 @@
             letter-spacing: 2px;
         }
 
+        .btn-small {
+            padding: 8px 12px;
+            font-size: 0.8rem;
+            width: auto;
+        }
+
         .wallet-header {
             display: flex;
             justify-content: space-between;
@@ -192,7 +198,7 @@
         }
         #balance {
             font-family: 'Bebas Neue', sans-serif;
-            font-size: 2.8rem;
+            font-size: 2.5rem;
             color: var(--green);
             text-shadow: 0 0 20px var(--green-glow);
             letter-spacing: 2px;
@@ -220,6 +226,139 @@
         #status.active { color: var(--green); border-color: var(--green); }
         #status.warn { color: var(--gold); border-color: rgba(255,215,0,0.3); }
         #status.error { color: var(--red); border-color: rgba(255,69,96,0.3); }
+
+        /* Game History Panel */
+        .history-panel {
+            width: 100%;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .history-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            background: var(--surface2);
+            border-bottom: 1px solid var(--border);
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .history-header:hover {
+            background: rgba(0, 255, 136, 0.05);
+        }
+
+        .history-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.7rem;
+            letter-spacing: 2px;
+            color: var(--muted);
+            text-transform: uppercase;
+        }
+
+        .history-stats {
+            display: flex;
+            gap: 16px;
+            font-size: 0.7rem;
+        }
+
+        .stat-win { color: var(--green); }
+        .stat-loss { color: var(--red); }
+        .stat-draw { color: var(--gold); }
+
+        .history-toggle {
+            color: var(--muted);
+            font-size: 0.8rem;
+            transition: transform 0.3s;
+        }
+
+        .history-toggle.open { transform: rotate(180deg); }
+
+        .history-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+        }
+
+        .history-content.open {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .history-list {
+            padding: 8px;
+        }
+
+        .history-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            font-size: 0.65rem;
+            letter-spacing: 1px;
+        }
+
+        .history-item:last-child {
+            border-bottom: none;
+        }
+
+        .history-result {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .result-icon {
+            font-size: 1rem;
+            width: 20px;
+            text-align: center;
+        }
+
+        .result-win { color: var(--green); }
+        .result-loss { color: var(--red); }
+        .result-draw { color: var(--gold); }
+
+        .history-time {
+            color: var(--muted);
+            font-size: 0.55rem;
+        }
+
+        .history-amount {
+            font-family: 'DM Mono', monospace;
+        }
+
+        .history-amount.positive { color: var(--green); }
+        .history-amount.negative { color: var(--red); }
+
+        .clear-history-btn {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--muted);
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 0.55rem;
+            cursor: pointer;
+            margin: 8px;
+            transition: all 0.2s;
+        }
+
+        .clear-history-btn:hover {
+            border-color: var(--red);
+            color: var(--red);
+        }
+
+        .empty-history {
+            text-align: center;
+            padding: 20px;
+            color: var(--muted);
+            font-size: 0.65rem;
+        }
 
         .board-wrap {
             position: relative;
@@ -264,7 +403,7 @@
             grid-template-columns: repeat(3, 1fr);
             gap: 8px;
             width: 100%;
-            max-width: 340px;
+            max-width: 300px;
         }
         .cell {
             aspect-ratio: 1;
@@ -272,7 +411,7 @@
             border: 1px solid var(--border);
             border-radius: 12px;
             font-family: 'Bebas Neue', sans-serif;
-            font-size: 3rem;
+            font-size: 2.8rem;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -446,6 +585,27 @@
         </div>
     </div>
 
+    <!-- GAME HISTORY PANEL -->
+    <div class="history-panel">
+        <div class="history-header" id="history-toggle">
+            <div class="history-title">
+                <span>📋 GAME HISTORY</span>
+                <span class="history-stats">
+                    <span class="stat-win" id="stat-wins">0W</span>
+                    <span class="stat-loss" id="stat-losses">0L</span>
+                    <span class="stat-draw" id="stat-draws">0D</span>
+                </span>
+            </div>
+            <span class="history-toggle" id="toggle-icon">▼</span>
+        </div>
+        <div class="history-content" id="history-content">
+            <div class="history-list" id="history-list">
+                <div class="empty-history">No games played yet</div>
+            </div>
+            <button class="clear-history-btn" id="clear-history">Clear History</button>
+        </div>
+    </div>
+
     <div id="status">Ready to play</div>
 
     <div class="board-wrap hidden" id="board-wrap">
@@ -536,6 +696,10 @@
         let board = Array(9).fill(null);
         let gameActive = false;
         let authCompleted = false;
+        
+        // Game history storage
+        let gameHistory = [];
+        const HISTORY_STORAGE_KEY = 'tictac_history';
 
         // --- DOM ELEMENTS ---
         const $ = id => document.getElementById(id);
@@ -553,7 +717,111 @@
         const depositBtn  = $('deposit-btn');
         const withdrawBtn = $('withdraw-btn');
 
-        // --- INITIALIZE SOCKET ---
+        // --- HISTORY FUNCTIONS ---
+        function loadHistory() {
+            try {
+                const stored = localStorage.getItem(HISTORY_STORAGE_KEY);
+                if (stored) {
+                    gameHistory = JSON.parse(stored);
+                }
+            } catch (e) {
+                console.error('Failed to load history:', e);
+                gameHistory = [];
+            }
+            updateHistoryDisplay();
+        }
+
+        function saveHistory() {
+            try {
+                localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(gameHistory));
+            } catch (e) {
+                console.error('Failed to save history:', e);
+            }
+            updateHistoryDisplay();
+        }
+
+        function addGameToHistory(result, amount) {
+            const game = {
+                id: Date.now() + '-' + Math.random().toString(36).substr(2, 6),
+                timestamp: new Date().toISOString(),
+                result: result, // 'win', 'loss', 'draw'
+                amount: amount,
+                opponent: 'Player'
+            };
+            gameHistory.unshift(game); // Add to beginning
+            
+            // Keep only last 50 games
+            if (gameHistory.length > 50) {
+                gameHistory = gameHistory.slice(0, 50);
+            }
+            
+            saveHistory();
+        }
+
+        function clearHistory() {
+            gameHistory = [];
+            saveHistory();
+            showToast('History cleared', '');
+        }
+
+        function updateHistoryDisplay() {
+            const historyList = $('history-list');
+            const statWins = $('stat-wins');
+            const statLosses = $('stat-losses');
+            const statDraws = $('stat-draws');
+            
+            // Calculate stats
+            const wins = gameHistory.filter(g => g.result === 'win').length;
+            const losses = gameHistory.filter(g => g.result === 'loss').length;
+            const draws = gameHistory.filter(g => g.result === 'draw').length;
+            
+            statWins.textContent = `${wins}W`;
+            statLosses.textContent = `${losses}L`;
+            statDraws.textContent = `${draws}D`;
+            
+            if (gameHistory.length === 0) {
+                historyList.innerHTML = '<div class="empty-history">No games played yet</div>';
+                return;
+            }
+            
+            // Build history HTML
+            historyList.innerHTML = gameHistory.slice(0, 10).map(game => {
+                const time = new Date(game.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const date = new Date(game.timestamp).toLocaleDateString([], { month: 'short', day: 'numeric' });
+                
+                let icon, resultClass, amountClass, amountText;
+                
+                if (game.result === 'win') {
+                    icon = '🏆';
+                    resultClass = 'result-win';
+                    amountClass = 'positive';
+                    amountText = `+KES ${game.amount}`;
+                } else if (game.result === 'loss') {
+                    icon = '❌';
+                    resultClass = 'result-loss';
+                    amountClass = 'negative';
+                    amountText = `-KES ${game.amount}`;
+                } else {
+                    icon = '🤝';
+                    resultClass = 'result-draw';
+                    amountClass = '';
+                    amountText = `KES ${game.amount}`;
+                }
+                
+                return `
+                    <div class="history-item">
+                        <div class="history-result">
+                            <span class="result-icon ${resultClass}">${icon}</span>
+                            <span>${game.result.toUpperCase()}</span>
+                        </div>
+                        <div class="history-time">${date} ${time}</div>
+                        <div class="history-amount ${amountClass}">${amountText}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // --- SOCKET INITIALIZATION ---
         function initSocket() {
             if (socket) {
                 socket.removeAllListeners();
@@ -571,7 +839,6 @@
 
             socket.on('connect', () => {
                 console.log('✅ Socket connected:', socket.id);
-                // If we have a phone number but auth wasn't completed, re-authenticate
                 if (myPhone && !authCompleted) {
                     console.log('🔄 Re-authenticating with phone:', myPhone);
                     socket.emit('auth', { phone: myPhone });
@@ -591,7 +858,6 @@
                 showToast('Connection error. Check your internet.', 'fail');
             });
 
-            // --- SOCKET EVENT HANDLERS ---
             socket.on('auth_success', ({ balance }) => {
                 authCompleted = true;
                 myPhone = $('phone-input').value.trim();
@@ -601,6 +867,7 @@
                 loginScreen.classList.add('hidden');
                 gameScreen.classList.remove('hidden');
                 setStatus('Ready to play', '');
+                loadHistory();
             });
 
             socket.on('balance_update', ({ balance }) => {
@@ -609,20 +876,17 @@
             });
 
             socket.on('online_count', ({ online, searching }) => {
-                console.log(`📊 Online: ${online}, Searching: ${searching}`);
                 $('online-count').textContent = online;
                 $('searching-count').textContent = searching;
             });
 
             socket.on('waiting', () => {
-                console.log('⏳ Waiting for opponent...');
                 setStatus('Searching for opponent', 'active', true);
                 playBtn.classList.add('hidden');
                 cancelBtn.classList.remove('hidden');
             });
 
             socket.on('search_cancelled', () => {
-                console.log('❌ Search cancelled');
                 setStatus('Ready to play', '');
                 playBtn.disabled = false;
                 playBtn.classList.remove('hidden');
@@ -631,7 +895,6 @@
             });
 
             socket.on('demo_bonus', ({ amount }) => {
-                console.log('🎉 Demo bonus:', amount);
                 showToast(`🎉 KES ${amount} free demo balance added!`, 'success');
             });
 
@@ -660,7 +923,6 @@
             });
 
             socket.on('move_made', ({ index, symbol, nextTurn }) => {
-                console.log(`🎲 Move made: ${symbol} at ${index}`);
                 applyMove(index, symbol);
                 currentTurn = nextTurn;
                 updateTurnIndicators();
@@ -674,19 +936,23 @@
                 if (result === 'DRAW') {
                     showResult('🤝', 'DRAW', `KES ${refund} refunded to your wallet`);
                     setStatus('Draw — entry fee refunded', 'warn');
+                    addGameToHistory('draw', refund);
                 } else if (result === 'FORFEIT') {
                     showResult('🏆', 'VICTORY', `Opponent disconnected — KES ${prize} credited`);
                     setStatus(`Opponent forfeited — KES ${prize} won`, 'active');
+                    addGameToHistory('win', prize);
                 } else {
                     const iWon = winnerSocketId === socket.id;
                     if (iWon) {
                         highlightWinCells(winner);
                         showResult('💰', 'VICTORY!', `KES ${prize} added to your wallet`);
                         setStatus(`You won KES ${prize}!`, 'active');
+                        addGameToHistory('win', prize);
                     } else {
                         highlightWinCells(winner);
                         showResult('❌', 'DEFEAT', 'Better luck next time');
                         setStatus('You lost this round', 'error');
+                        addGameToHistory('loss', 50);
                     }
                 }
             });
@@ -701,7 +967,6 @@
             });
 
             socket.on('info_msg', msg => {
-                console.log('ℹ️ Info:', msg);
                 showToast(msg, '');
             });
 
@@ -730,7 +995,6 @@
             if (!gameActive) return;
             if (currentTurn !== mySymbol) return;
             if (board[index]) return;
-            console.log(`🎲 Making move at index ${index}`);
             socket.emit('make_move', { gameId, index });
         }
 
@@ -827,9 +1091,7 @@
             myPhone = raw;
             authCompleted = false;
             
-            // Ensure socket is connected before emitting
             if (!socket.connected) {
-                console.log('Socket not connected, connecting...');
                 socket.connect();
                 setTimeout(() => {
                     socket.emit('auth', { phone: raw });
@@ -847,43 +1109,30 @@
             authCompleted = false;
             gameScreen.classList.add('hidden');
             loginScreen.classList.remove('hidden');
-            // Re-initialize socket for fresh start
             setTimeout(() => initSocket(), 100);
         }
 
         function findMatch() {
-            console.log('🎮 findMatch() called');
-            console.log('📱 myPhone:', myPhone);
-            console.log('🔌 socket.connected:', socket?.connected);
-            console.log('✅ authCompleted:', authCompleted);
-            
             if (!myPhone) {
-                console.log('❌ No phone number - not authenticated');
                 showToast('Not authenticated', 'fail');
                 return;
             }
             
             if (!socket?.connected) {
-                console.log('❌ Socket not connected - attempting reconnect');
                 socket.connect();
                 showToast('Reconnecting... Try again in a moment', 'warn');
                 setTimeout(() => {
-                    if (socket.connected) {
-                        findMatch();
-                    }
+                    if (socket.connected) findMatch();
                 }, 1000);
                 return;
             }
             
             playBtn.disabled = true;
             setStatus('Searching for opponent', 'active', true);
-            
-            console.log('📤 Emitting find_match event');
             socket.emit('find_match');
         }
 
         function cancelSearch() {
-            console.log('❌ Cancel search clicked');
             socket.emit('cancel_search');
         }
 
@@ -941,17 +1190,19 @@
             }
         }
 
-        // --- INITIALIZE EVERYTHING ---
+        // --- HISTORY TOGGLE ---
+        function toggleHistory() {
+            const content = $('history-content');
+            const icon = $('toggle-icon');
+            content.classList.toggle('open');
+            icon.classList.toggle('open');
+        }
+
+        // --- INITIALIZE ---
         function bindEvents() {
             loginBtn.addEventListener('click', login);
             logoutBtn.addEventListener('click', logout);
-            
-            // Use event listeners instead of inline onclick for reliability
-            playBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                findMatch();
-            });
-            
+            playBtn.addEventListener('click', (e) => { e.preventDefault(); findMatch(); });
             cancelBtn.addEventListener('click', cancelSearch);
             depositBtn.addEventListener('click', showDepositModal);
             withdrawBtn.addEventListener('click', showWithdrawModal);
@@ -961,6 +1212,8 @@
             $('submit-withdraw').addEventListener('click', submitWithdraw);
             $('cancel-withdraw').addEventListener('click', hideWithdrawModal);
             $('dismiss-result').addEventListener('click', dismissResult);
+            $('history-toggle').addEventListener('click', toggleHistory);
+            $('clear-history').addEventListener('click', clearHistory);
             
             $('phone-input').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
             $('deposit-amount').addEventListener('keydown', e => { if (e.key === 'Enter') submitDeposit(); });
@@ -969,21 +1222,14 @@
             console.log('✅ All event listeners bound');
         }
 
-        // Start everything
         initSocket();
         initBoard();
         bindEvents();
+        loadHistory();
         
-        // Debug check
-        console.log('🔍 Play button element:', playBtn);
-        console.log('🎮 Global findMatch attached to window');
         window.findMatch = findMatch;
         
-        // Extra safety: Force enable button
-        setTimeout(() => {
-            playBtn.disabled = false;
-            console.log('🔓 Play button force-enabled');
-        }, 500);
+        setTimeout(() => { playBtn.disabled = false; }, 500);
     })();
 </script>
 </body>
