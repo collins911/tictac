@@ -8,7 +8,7 @@ const helmet   = require('helmet');
 const rateLimit = require('express-rate-limit');
 const path     = require('path');
 const crypto   = require('crypto');
-const bcrypt   = require('bcrypt');
+const bcrypt   = require('bcryptjs');
 
 const app    = express();
 const server = http.createServer(app);
