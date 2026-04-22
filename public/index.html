@@ -36,7 +36,6 @@
             overflow-x: hidden;
         }
 
-        /* ── BACKGROUND GRID ── */
         body::before {
             content: '';
             position: fixed;
@@ -79,6 +78,20 @@
             color: var(--muted);
             text-transform: uppercase;
             margin-top: -12px;
+        }
+
+        /* ── DEMO BANNER ── */
+        .demo-banner {
+            width: 100%;
+            background: rgba(255, 215, 0, 0.08);
+            border: 1px solid rgba(255, 215, 0, 0.3);
+            border-radius: 10px;
+            padding: 10px 16px;
+            font-size: 0.65rem;
+            letter-spacing: 2px;
+            color: var(--gold);
+            text-align: center;
+            text-transform: uppercase;
         }
 
         /* ── CARDS ── */
@@ -311,10 +324,7 @@
             flex-direction: column;
             gap: 16px;
         }
-        .overlay-icon {
-            font-size: 4rem;
-            line-height: 1;
-        }
+        .overlay-icon { font-size: 4rem; line-height: 1; }
         .overlay-title {
             font-family: 'Bebas Neue', sans-serif;
             font-size: 2.2rem;
@@ -326,7 +336,7 @@
             color: var(--muted);
         }
 
-        /* ── DEPOSIT MODAL ── */
+        /* ── MODAL ── */
         .modal {
             position: fixed;
             inset: 0;
@@ -355,15 +365,15 @@
             letter-spacing: 3px;
             color: var(--green);
         }
-        .modal-close {
-            position: absolute;
-            top: 12px;
-            right: 16px;
-            background: none;
-            border: none;
-            color: var(--muted);
-            font-size: 1.4rem;
-            cursor: pointer;
+        .modal-note {
+            font-size: 0.65rem;
+            color: var(--gold);
+            letter-spacing: 1px;
+            background: rgba(255,215,0,0.08);
+            border: 1px solid rgba(255,215,0,0.2);
+            border-radius: 8px;
+            padding: 8px 12px;
+            text-align: center;
         }
 
         /* ── SEARCHING ANIMATION ── */
@@ -397,6 +407,7 @@
         #toast.show { transform: translateX(-50%) translateY(0); }
         #toast.success { border-color: var(--green); color: var(--green); }
         #toast.fail { border-color: var(--red); color: var(--red); }
+        #toast.warn { border-color: var(--gold); color: var(--gold); }
 
         /* ── SCROLLBAR ── */
         ::-webkit-scrollbar { width: 4px; }
@@ -411,25 +422,35 @@
     <div class="logo">TicTac<span>Cash</span></div>
     <p class="tagline">Play. Win. Cash Out.</p>
 
+    <div class="demo-banner">
+        🎮 Demo Mode — Enter any Kenyan number to get KES 1,000 free play money
+    </div>
+
     <div class="card">
         <div class="input-group">
-            <label>M-Pesa Phone Number</label>
+            <label>Your Phone Number</label>
             <input type="tel" id="phone-input" placeholder="2547XXXXXXXX" maxlength="15">
         </div>
         <br>
         <button class="btn btn-primary" onclick="login()">Enter Arena</button>
     </div>
     <p style="font-size:0.6rem;color:var(--muted);text-align:center;letter-spacing:1px;">
-        Sandbox mode — use Safaricom test numbers
+        Demo mode — no real money involved
     </p>
 </div>
 
 <!-- GAME SCREEN -->
 <div class="screen hidden" id="game-screen">
+
+    <!-- DEMO BANNER -->
+    <div class="demo-banner" id="demo-banner">
+        🎮 Demo Mode — Play money only. No real deposits or withdrawals.
+    </div>
+
     <!-- WALLET -->
     <div class="card">
         <div class="wallet-header">
-            <span class="wallet-label">Balance</span>
+            <span class="wallet-label">Demo Balance</span>
             <span class="wallet-phone" id="wallet-phone"></span>
         </div>
         <div id="balance">KES 0.00</div>
@@ -470,10 +491,10 @@
 
 <!-- WITHDRAW MODAL -->
 <div class="modal hidden" id="withdraw-modal">
-    <div class="modal-card" style="position:relative">
+    <div class="modal-card">
         <div class="modal-title" style="color:var(--gold)">Withdraw Funds</div>
-        <div style="font-size:0.65rem;color:var(--muted);letter-spacing:1px;margin-top:-8px;">
-            Funds sent directly to your M-Pesa
+        <div class="modal-note">
+            🎮 Demo mode — withdrawals are disabled. This is play money only!
         </div>
         <div class="input-group">
             <label>Amount (KES)</label>
@@ -487,8 +508,11 @@
 
 <!-- DEPOSIT MODAL -->
 <div class="modal hidden" id="deposit-modal">
-    <div class="modal-card" style="position:relative">
+    <div class="modal-card">
         <div class="modal-title">Deposit Funds</div>
+        <div class="modal-note">
+            🎮 Demo mode — deposits are disabled. Use your free KES 1,000 demo balance!
+        </div>
         <div class="input-group">
             <label>Amount (KES)</label>
             <input type="number" id="deposit-amount" placeholder="e.g. 100" min="10" max="100000">
@@ -515,13 +539,12 @@
     const socket = io();
     let myPhone = null;
     let gameId = null;
-    let mySymbol = null; // 'X' or 'O'
+    let mySymbol = null;
     let currentTurn = 'X';
     let board = Array(9).fill(null);
     let gameActive = false;
 
-    // ── DOM REFS ─────────────────────────────────────────────────────────
-
+    // ── DOM REFS ──────────────────────────────────────────────────────────
     const $ = id => document.getElementById(id);
     const loginScreen = $('login-screen');
     const gameScreen  = $('game-screen');
@@ -532,8 +555,7 @@
     const boardEl     = $('board');
     const overlayEl   = $('result-overlay');
 
-    // ── INIT BOARD ───────────────────────────────────────────────────────
-
+    // ── INIT BOARD ────────────────────────────────────────────────────────
     function initBoard() {
         boardEl.innerHTML = '';
         for (let i = 0; i < 9; i++) {
@@ -547,10 +569,9 @@
     initBoard();
 
     // ── LOGIN / LOGOUT ────────────────────────────────────────────────────
-
     function login() {
         const raw = $('phone-input').value.trim();
-        if (!raw) return showToast('Enter your M-Pesa phone number', 'fail');
+        if (!raw) return showToast('Enter your phone number', 'fail');
         socket.emit('auth', { phone: raw });
     }
 
@@ -562,8 +583,7 @@
         loginScreen.classList.remove('hidden');
     }
 
-    // ── DEPOSIT ───────────────────────────────────────────────────────────
-
+    // ── DEPOSIT / WITHDRAW ────────────────────────────────────────────────
     function showDepositModal() { $('deposit-modal').classList.remove('hidden'); }
     function hideDepositModal() { $('deposit-modal').classList.add('hidden'); }
 
@@ -580,9 +600,6 @@
         const amount = parseInt($('withdraw-amount').value, 10);
         if (!amount || amount < 10) return showToast('Minimum withdrawal is KES 10', 'fail');
 
-        const currentBal = parseFloat(balanceEl.textContent.replace('KES ', ''));
-        if (amount > currentBal) return showToast('Insufficient balance', 'fail');
-
         try {
             const res = await fetch('/mpesa/withdraw', {
                 method: 'POST',
@@ -593,8 +610,6 @@
             if (res.ok) {
                 showToast(data.msg, 'success');
                 hideWithdrawModal();
-                // Optimistically update balance
-                updateBalance((currentBal - amount).toFixed(2));
             } else {
                 showToast(data.error || 'Withdrawal failed', 'fail');
             }
@@ -626,7 +641,6 @@
     }
 
     // ── MATCHMAKING ───────────────────────────────────────────────────────
-
     function findMatch() {
         if (!myPhone) return showToast('Not authenticated', 'fail');
         playBtn.disabled = true;
@@ -635,7 +649,6 @@
     }
 
     // ── MOVES ─────────────────────────────────────────────────────────────
-
     function makeMove(index) {
         if (!gameActive) return;
         if (currentTurn !== mySymbol) return;
@@ -658,7 +671,6 @@
         if (!gameActive) return;
         if (currentTurn === mySymbol) {
             setStatus('Your turn', 'active');
-            // Make empty cells clickable
             [...boardEl.children].forEach((c, i) => {
                 if (!board[i]) c.classList.add('clickable');
             });
@@ -670,16 +682,15 @@
 
     function highlightWinCells(symbol) {
         const wins = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
-        const board = [...boardEl.children].map(c => c.textContent || null);
-        for (const [a,b,c] of wins) {
-            if (board[a] === symbol && board[b] === symbol && board[c] === symbol) {
-                [a,b,c].forEach(i => boardEl.children[i].classList.add('win-cell'));
+        const b = [...boardEl.children].map(c => c.textContent || null);
+        for (const [a, bc, c] of wins) {
+            if (b[a] === symbol && b[bc] === symbol && b[c] === symbol) {
+                [a, bc, c].forEach(i => boardEl.children[i].classList.add('win-cell'));
             }
         }
     }
 
     // ── RESULT OVERLAY ────────────────────────────────────────────────────
-
     function showResult(icon, title, sub) {
         $('result-icon').textContent = icon;
         $('result-title').textContent = title;
@@ -708,7 +719,6 @@
     }
 
     // ── STATUS ────────────────────────────────────────────────────────────
-
     function setStatus(msg, type = '', searching = false) {
         statusEl.className = type ? `active ${type}` : '';
         statusEl.innerHTML = searching
@@ -717,7 +727,6 @@
     }
 
     // ── BALANCE ───────────────────────────────────────────────────────────
-
     function updateBalance(value) {
         const formatted = `KES ${parseFloat(value).toFixed(2)}`;
         balanceEl.textContent = formatted;
@@ -726,14 +735,13 @@
     }
 
     // ── TOAST ─────────────────────────────────────────────────────────────
-
     let toastTimer;
     function showToast(msg, type = '') {
         const t = $('toast');
         t.textContent = msg;
         t.className = `show ${type}`;
         clearTimeout(toastTimer);
-        toastTimer = setTimeout(() => { t.className = ''; }, 3000);
+        toastTimer = setTimeout(() => { t.className = ''; }, 3500);
     }
 
     // ── SOCKET EVENTS ─────────────────────────────────────────────────────
@@ -751,6 +759,16 @@
         updateBalance(balance);
     });
 
+    // Demo bonus notification
+    socket.on('demo_bonus', ({ amount }) => {
+        showToast(`🎉 KES ${amount} free demo balance added!`, 'success');
+    });
+
+    // Waiting in queue
+    socket.on('waiting', () => {
+        setStatus('Searching for opponent', 'active', true);
+    });
+
     socket.on('match_found', ({ gameId: gId, playerX, playerO }) => {
         gameId = gId;
         mySymbol = (socket.id === playerX) ? 'X' : 'O';
@@ -758,7 +776,6 @@
         board = Array(9).fill(null);
         gameActive = true;
 
-        // Update indicators
         if (mySymbol === 'X') {
             $('indicator-x').querySelector('span:last-child').textContent = 'YOU';
             $('indicator-o').querySelector('span:first-child').textContent = 'OPP';
@@ -771,6 +788,7 @@
         boardWrap.classList.remove('hidden');
         playBtn.classList.add('hidden');
         updateTurnIndicators();
+        showToast('Match found! Game starting...', 'success');
     });
 
     socket.on('move_made', ({ index, symbol, nextTurn }) => {
@@ -779,13 +797,12 @@
         updateTurnIndicators();
     });
 
-    socket.on('game_finished', ({ result, winner, winnerSocketId, prize }) => {
+    socket.on('game_finished', ({ result, winner, winnerSocketId, prize, refund }) => {
         gameActive = false;
         [...boardEl.children].forEach(c => c.classList.remove('clickable'));
 
         if (result === 'DRAW') {
-            highlightWinCells(null);
-            showResult('🤝', 'DRAW', 'KES 50 refunded to your wallet');
+            showResult('🤝', 'DRAW', `KES ${refund} refunded to your wallet`);
             setStatus('Draw — entry fee refunded', 'warn');
         } else if (result === 'FORFEIT') {
             showResult('🏆', 'VICTORY', `Opponent disconnected — KES ${prize} credited`);
@@ -794,7 +811,7 @@
             const iWon = winnerSocketId === socket.id;
             if (iWon) {
                 highlightWinCells(winner);
-                showResult('💰', 'VICTORY!', `KES ${prize} has been added to your wallet`);
+                showResult('💰', 'VICTORY!', `KES ${prize} added to your wallet`);
                 setStatus(`You won KES ${prize}!`, 'active');
             } else {
                 highlightWinCells(winner);
@@ -806,14 +823,13 @@
 
     socket.on('error_msg', msg => {
         showToast(msg, 'fail');
-        // Re-enable play button if we were searching
         if (!gameActive) {
             playBtn.disabled = false;
             setStatus('Ready to play', '');
         }
     });
 
-    socket.on('info_msg', msg => setStatus(msg, 'active', true));
+    socket.on('info_msg', msg => showToast(msg, ''));
 
     socket.on('withdrawal_success', ({ amount }) => {
         showToast(`KES ${amount} sent to your M-Pesa!`, 'success');
@@ -821,7 +837,6 @@
 
     socket.on('withdrawal_failed', ({ reason }) => {
         showToast(`Withdrawal failed: ${reason}`, 'fail');
-        // Balance already refunded by server — balance_update event will follow
     });
 
     socket.on('disconnect', () => {
@@ -832,11 +847,10 @@
     });
 
     socket.on('connect', () => {
-        // Re-auth on reconnect if we have a phone
         if (myPhone) socket.emit('auth', { phone: myPhone });
     });
 
-    // Allow Enter key on login
+    // Enter key support
     $('phone-input').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
     $('deposit-amount').addEventListener('keydown', e => { if (e.key === 'Enter') submitDeposit(); });
     $('withdraw-amount').addEventListener('keydown', e => { if (e.key === 'Enter') submitWithdraw(); });

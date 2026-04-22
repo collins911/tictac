@@ -2,6 +2,7 @@
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
+const { createAdapter } = require('@socket.io/redis-adapter');
 const { createClient } = require('redis');
 const IntaSend = require('intasend-node');
 const helmet = require('helmet');
@@ -11,10 +12,12 @@ const crypto = require('crypto');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
-const redis = createClient({ url: process.env.REDIS_URL || 'redis://127.0.0.1:6380' });
+const io = new Server(server, {
+    cors: { origin: '*' },
+    transports: ['websocket', 'polling'],
+});
 
-// ─── SECURITY HEADERS (fixes all 7 failing checks) ───────────────────────
+// ─── SECURITY HEADERS ────────────────────────────────────────────────────
 app.use(helmet({
     contentSecurityPolicy: {
         directives: {
@@ -22,7 +25,7 @@ app.use(helmet({
             scriptSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
             styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
             fontSrc: ["'self'", "https://fonts.gstatic.com"],
-            connectSrc: ["'self'", "wss:", "ws:"],
+            connectSrc: ["'self'", "wss:", "ws:", "https:"],
             imgSrc: ["'self'", "data:"],
             frameSrc: ["'none'"],
         },
@@ -35,8 +38,8 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // ─── RATE LIMITING ────────────────────────────────────────────────────────
 const depositLimiter = rateLimit({
-    windowMs: 60 * 1000,        // 1 minute
-    max: 5,                      // 5 deposit attempts per minute
+    windowMs: 60 * 1000,
+    max: 5,
     message: { error: 'Too many deposit attempts. Please wait a minute.' },
     standardHeaders: true,
     legacyHeaders: false,
@@ -44,26 +47,18 @@ const depositLimiter = rateLimit({
 
 const withdrawLimiter = rateLimit({
     windowMs: 60 * 1000,
-    max: 3,                      // 3 withdrawal attempts per minute
+    max: 3,
     message: { error: 'Too many withdrawal attempts. Please wait a minute.' },
-    standardHeaders: true,
-    legacyHeaders: false,
-});
-
-const authLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000,   // 15 minutes
-    max: 20,                     // 20 auth attempts per 15 min
-    message: { error: 'Too many requests. Please try again later.' },
     standardHeaders: true,
     legacyHeaders: false,
 });
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────
 const ENTRY_FEE = 50;
-const WIN_PRIZE = 85;           // 100 pot - 15 rake
-const DRAW_REFUND = 50;         // Full refund on draw
-const WITHDRAW_FEE = 10;        // IntaSend B2C charge paid by player
-const DEMO_BONUS = 1000;        // Free demo money on first login
+const WIN_PRIZE = 85;
+const DRAW_REFUND = 50;
+const WITHDRAW_FEE = 10;
+const DEMO_BONUS = 1000;
 const WIN_COMBOS = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
 
 // ─── INTASEND CLIENT ─────────────────────────────────────────────────────
@@ -74,7 +69,6 @@ const intasend = new IntaSend(
 );
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────
-
 const getBalance = async (phone) =>
     parseFloat(await redis.get(`user:${phone}:balance`) || '0');
 
@@ -123,26 +117,32 @@ const validateAmount = (amount) => {
     return parsed;
 };
 
-// ─── AUDIT LOGGER ─────────────────────────────────────────────────────────
 const audit = (event, data) => {
-    console.log(JSON.stringify({
-        timestamp: new Date().toISOString(),
-        event,
-        ...data,
-    }));
+    console.log(JSON.stringify({ timestamp: new Date().toISOString(), event, ...data }));
 };
 
 // ─── HEALTH CHECK ─────────────────────────────────────────────────────────
 app.get('/health', (req, res) => res.json({ status: 'ok', ts: Date.now() }));
 
-// ─── SERVER-SIDE GAME STATE ───────────────────────────────────────────────
-const games = new Map();
-
+// ─── SERVER-SIDE GAME STATE (stored in Redis for multi-instance support) ──
 const checkWinner = (board) => {
     for (const [a, b, c] of WIN_COMBOS) {
         if (board[a] && board[a] === board[b] && board[a] === board[c]) return board[a];
     }
     return board.every(Boolean) ? 'DRAW' : null;
+};
+
+const saveGame = async (gameId, game) => {
+    await redis.set(`game:${gameId}`, JSON.stringify(game), { EX: 3600 });
+};
+
+const getGame = async (gameId) => {
+    const raw = await redis.get(`game:${gameId}`);
+    return raw ? JSON.parse(raw) : null;
+};
+
+const deleteGame = async (gameId) => {
+    await redis.del(`game:${gameId}`);
 };
 
 // ─── DEPOSIT: STK PUSH ────────────────────────────────────────────────────
@@ -159,7 +159,6 @@ app.post('/mpesa/deposit', depositLimiter, async (req, res) => {
         return res.status(400).json({ error: 'Amount must be a positive number between KES 1 and KES 100,000.' });
     }
 
-    // Block deposits in demo mode
     if (process.env.DEMO_MODE === 'true') {
         return res.status(403).json({ error: 'Deposits disabled in demo mode. Use your free KES 1,000 demo balance.' });
     }
@@ -176,7 +175,7 @@ app.post('/mpesa/deposit', depositLimiter, async (req, res) => {
             api_ref: `deposit_${normalizedPhone}_${Date.now()}`,
         });
 
-        audit('deposit_initiated', { phone: normalizedPhone, amount: parsedAmount, invoice: resp.invoice?.invoice_id });
+        audit('deposit_initiated', { phone: normalizedPhone, amount: parsedAmount });
 
         await redis.set(
             `deposit:${resp.invoice?.invoice_id}`,
@@ -186,11 +185,9 @@ app.post('/mpesa/deposit', depositLimiter, async (req, res) => {
 
         res.json({ msg: 'STK Prompt Sent! Check your phone.' });
 
-        // ── SANDBOX ONLY: auto-credit after 5 seconds ──
         if (process.env.NODE_ENV !== 'production') {
             setTimeout(async () => {
                 const newBal = await creditBalance(normalizedPhone, parsedAmount);
-                audit('deposit_autocredited', { phone: normalizedPhone, amount: parsedAmount, newBalance: newBal });
                 io.to(`phone:${normalizedPhone}`).emit('balance_update', {
                     balance: parseFloat(newBal).toFixed(2)
                 });
@@ -198,7 +195,7 @@ app.post('/mpesa/deposit', depositLimiter, async (req, res) => {
         }
 
     } catch (err) {
-        audit('deposit_error', { phone: normalizedPhone, amount: parsedAmount, error: err.message });
+        audit('deposit_error', { phone: normalizedPhone, error: err.message });
         res.status(500).json({ error: 'Deposit failed. Please try again.' });
     }
 });
@@ -206,7 +203,6 @@ app.post('/mpesa/deposit', depositLimiter, async (req, res) => {
 // ─── DEPOSIT WEBHOOK ─────────────────────────────────────────────────────
 app.post('/intasend/webhook', async (req, res) => {
     const { invoice_id, state, net_amount, account } = req.body;
-
     if (state !== 'COMPLETE') return res.send('OK');
 
     const pendingRaw = await redis.get(`deposit:${invoice_id}`);
@@ -220,17 +216,11 @@ app.post('/intasend/webhook', async (req, res) => {
         amount = net_amount;
     }
 
-    if (!phone || !amount) {
-        audit('webhook_error', { invoice_id, reason: 'missing phone or amount' });
-        return res.status(400).send('Missing data');
-    }
+    if (!phone || !amount) return res.status(400).send('Missing data');
 
     const newBal = await creditBalance(phone, amount);
-    audit('deposit_completed', { phone, amount, newBalance: newBal });
-    io.to(`phone:${phone}`).emit('balance_update', {
-        balance: parseFloat(newBal).toFixed(2)
-    });
-
+    audit('deposit_completed', { phone, amount });
+    io.to(`phone:${phone}`).emit('balance_update', { balance: parseFloat(newBal).toFixed(2) });
     res.send('OK');
 });
 
@@ -239,16 +229,13 @@ app.post('/mpesa/withdraw', withdrawLimiter, async (req, res) => {
     const { phone, amount } = req.body;
 
     const normalizedPhone = normalizePhone(phone);
-    if (!normalizedPhone) {
-        return res.status(400).json({ error: 'Invalid phone number.' });
-    }
+    if (!normalizedPhone) return res.status(400).json({ error: 'Invalid phone number.' });
 
     const parsedAmount = validateAmount(amount);
     if (!parsedAmount || parsedAmount < 10) {
         return res.status(400).json({ error: 'Minimum withdrawal is KES 10.' });
     }
 
-    // Block withdrawals in demo mode
     if (process.env.DEMO_MODE === 'true') {
         return res.status(403).json({ error: 'Withdrawals disabled in demo mode. This is play money only!' });
     }
@@ -274,7 +261,7 @@ app.post('/mpesa/withdraw', withdrawLimiter, async (req, res) => {
             }]
         });
 
-        audit('withdrawal_initiated', { phone: normalizedPhone, amount: parsedAmount, tracking: resp?.tracking_id });
+        audit('withdrawal_initiated', { phone: normalizedPhone, amount: parsedAmount });
 
         if (resp?.tracking_id) {
             await redis.set(
@@ -288,7 +275,7 @@ app.post('/mpesa/withdraw', withdrawLimiter, async (req, res) => {
 
     } catch (err) {
         await creditBalance(normalizedPhone, totalDeduct);
-        audit('withdrawal_error', { phone: normalizedPhone, amount: parsedAmount, error: err.message });
+        audit('withdrawal_error', { phone: normalizedPhone, error: err.message });
         res.status(500).json({ error: 'Withdrawal failed. Your balance has been refunded.' });
     }
 });
@@ -318,15 +305,31 @@ app.post('/intasend/webhook/payouts', async (req, res) => {
     res.send('OK');
 });
 
-// ─── GLOBAL ERROR HANDLER (no stack traces in production) ─────────────────
+// ─── GLOBAL ERROR HANDLER ─────────────────────────────────────────────────
 app.use((err, req, res, next) => {
     audit('server_error', { path: req.path, error: err.message });
     res.status(500).json({ error: 'Internal server error' });
 });
 
-// ─── SOCKET.IO ────────────────────────────────────────────────────────────
+// ─── SOCKET.IO + REDIS ADAPTER ────────────────────────────────────────────
+let redis;
+let redisPub;
+let redisSub;
+
 async function start() {
+    // Main redis client
+    redis = createClient({ url: process.env.REDIS_URL || 'redis://127.0.0.1:6380' });
     await redis.connect();
+
+    // Pub/sub clients for Socket.IO Redis adapter
+    redisPub = redis.duplicate();
+    redisSub = redis.duplicate();
+    await redisPub.connect();
+    await redisSub.connect();
+
+    // Attach Redis adapter so all instances share socket rooms
+    io.adapter(createAdapter(redisPub, redisSub));
+
     await redis.del('matchmaking_queue');
 
     io.on('connection', (socket) => {
@@ -339,13 +342,13 @@ async function start() {
             socket.phone = normalizedPhone;
             socket.join(`phone:${normalizedPhone}`);
 
-            // ── DEMO BONUS: give KES 1,000 to first-time users ──
+            // Demo bonus for first-time users
             const hasPlayed = await redis.get(`user:${normalizedPhone}:demo_claimed`);
             if (!hasPlayed) {
                 await creditBalance(normalizedPhone, DEMO_BONUS);
                 await redis.set(`user:${normalizedPhone}:demo_claimed`, '1');
                 audit('demo_bonus_credited', { phone: normalizedPhone, amount: DEMO_BONUS });
-                socket.emit('info_msg', `🎉 Welcome! KES ${DEMO_BONUS} demo balance added to your account.`);
+                socket.emit('demo_bonus', { amount: DEMO_BONUS });
             }
 
             const bal = await getBalance(normalizedPhone);
@@ -374,7 +377,7 @@ async function start() {
                 if (!opponentSocket) {
                     await creditBalance(opponentPhone, ENTRY_FEE);
                     await redis.rPush('matchmaking_queue', `${socket.phone}::${socket.id}`);
-                    socket.emit('info_msg', 'Searching for opponent...');
+                    socket.emit('waiting', {});
                     return;
                 }
 
@@ -382,13 +385,14 @@ async function start() {
                 socket.join(gameId);
                 opponentSocket.join(gameId);
 
-                games.set(gameId, {
+                const game = {
                     board: Array(9).fill(null),
                     players: { X: socket.phone, O: opponentPhone },
                     sockets: { X: socket.id, O: opponentSocketId },
                     currentTurn: 'X',
-                });
+                };
 
+                await saveGame(gameId, game);
                 audit('game_started', { gameId, playerX: socket.phone, playerO: opponentPhone });
 
                 io.to(gameId).emit('match_found', {
@@ -398,13 +402,13 @@ async function start() {
                 });
             } else {
                 await redis.rPush('matchmaking_queue', `${socket.phone}::${socket.id}`);
-                socket.emit('info_msg', 'Searching for opponent...');
+                socket.emit('waiting', {});
             }
         });
 
         // ── MAKE MOVE ─────────────────────────────────────────────────────
         socket.on('make_move', async ({ gameId, index }) => {
-            const game = games.get(gameId);
+            const game = await getGame(gameId);
             if (!game) return socket.emit('error_msg', 'Game not found.');
 
             const mySymbol = game.sockets.X === socket.id ? 'X' : game.sockets.O === socket.id ? 'O' : null;
@@ -415,6 +419,7 @@ async function start() {
 
             game.board[index] = mySymbol;
             game.currentTurn = mySymbol === 'X' ? 'O' : 'X';
+            await saveGame(gameId, game);
 
             io.to(gameId).emit('move_made', { index, symbol: mySymbol, nextTurn: game.currentTurn });
 
@@ -434,12 +439,7 @@ async function start() {
                     if (socketX) socketX.emit('balance_update', { balance: balX.toFixed(2) });
                     if (socketO) socketO.emit('balance_update', { balance: balO.toFixed(2) });
                     audit('game_draw', { gameId });
-                    io.to(gameId).emit('game_finished', {
-                        result: 'DRAW',
-                        winner: null,
-                        winnerSocketId: null,
-                        refund: DRAW_REFUND,
-                    });
+                    io.to(gameId).emit('game_finished', { result: 'DRAW', winner: null, winnerSocketId: null, refund: DRAW_REFUND });
                 } else {
                     const winnerPhone = game.players[result];
                     const winnerSocketId = game.sockets[result];
@@ -448,14 +448,9 @@ async function start() {
                     const winnerSocket = io.sockets.sockets.get(winnerSocketId);
                     if (winnerSocket) winnerSocket.emit('balance_update', { balance: newBal.toFixed(2) });
                     audit('game_won', { gameId, winner: winnerPhone, prize: WIN_PRIZE });
-                    io.to(gameId).emit('game_finished', {
-                        result: 'WIN',
-                        winner: result,
-                        winnerSocketId,
-                        prize: WIN_PRIZE,
-                    });
+                    io.to(gameId).emit('game_finished', { result: 'WIN', winner: result, winnerSocketId, prize: WIN_PRIZE });
                 }
-                games.delete(gameId);
+                await deleteGame(gameId);
             }
         });
 
@@ -470,8 +465,13 @@ async function start() {
                     }
                 }
 
-                for (const [gameId, game] of games.entries()) {
+                // Find any active game this socket was in
+                const gameKeys = await redis.keys('game:*');
+                for (const key of gameKeys) {
+                    const game = JSON.parse(await redis.get(key));
+                    if (!game) continue;
                     if (game.sockets.X === socket.id || game.sockets.O === socket.id) {
+                        const gameId = key.replace('game:', '');
                         const mySymbol = game.sockets.X === socket.id ? 'X' : 'O';
                         const opponentSymbol = mySymbol === 'X' ? 'O' : 'X';
                         const opponentPhone = game.players[opponentSymbol];
@@ -490,7 +490,7 @@ async function start() {
                             });
                         }
                         audit('game_forfeit', { gameId, winner: opponentPhone });
-                        games.delete(gameId);
+                        await deleteGame(gameId);
                     }
                 }
             }
