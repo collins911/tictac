@@ -419,7 +419,7 @@
             <input type="tel" id="phone-input" placeholder="2547XXXXXXXX" maxlength="15" value="254708374149">
         </div>
         <br>
-        <button class="btn btn-primary" onclick="login()">Enter Arena</button>
+        <button class="btn btn-primary" id="login-btn">Enter Arena</button>
     </div>
     <p style="font-size:0.6rem;color:var(--muted);text-align:center;letter-spacing:1px;">
         Demo mode — no real money involved
@@ -441,8 +441,8 @@
         <div id="balance">KES 0.00</div>
         <br>
         <div style="display:flex;gap:10px;">
-            <button class="btn btn-outline" style="flex:1" onclick="showDepositModal()">⬆ Deposit</button>
-            <button class="btn btn-outline" style="flex:1;color:var(--gold);border-color:rgba(255,215,0,0.3)" onclick="showWithdrawModal()">⬇ Withdraw</button>
+            <button class="btn btn-outline" style="flex:1" id="deposit-btn">⬆ Deposit</button>
+            <button class="btn btn-outline" style="flex:1;color:var(--gold);border-color:rgba(255,215,0,0.3)" id="withdraw-btn">⬇ Withdraw</button>
         </div>
     </div>
 
@@ -468,15 +468,15 @@
         <span>🔍 <span id="searching-count">0</span> SEARCHING</span>
     </div>
 
-    <button class="btn btn-primary" id="play-btn" onclick="findMatch()">
+    <button class="btn btn-primary" id="play-btn">
         Search for Match — KES 50
     </button>
-    <button class="btn btn-danger hidden" id="cancel-btn" onclick="cancelSearch()"
+    <button class="btn btn-danger hidden" id="cancel-btn"
         style="border-color:rgba(255,69,96,0.5);color:var(--red);">
         ✕ Cancel Search
     </button>
 
-    <button class="btn btn-danger" onclick="logout()">Disconnect</button>
+    <button class="btn btn-danger" id="logout-btn">Disconnect</button>
 </div>
 
 <!-- WITHDRAW MODAL -->
@@ -491,8 +491,8 @@
             <input type="number" id="withdraw-amount" placeholder="Min KES 10" min="10">
         </div>
         <div id="withdraw-balance-hint" style="font-size:0.65rem;color:var(--muted);letter-spacing:1px;text-align:right;margin-top:-8px;"></div>
-        <button class="btn btn-primary" style="background:var(--gold);color:#000" onclick="submitWithdraw()">Withdraw to M-Pesa</button>
-        <button class="btn btn-outline" onclick="hideWithdrawModal()">Cancel</button>
+        <button class="btn btn-primary" style="background:var(--gold);color:#000" id="submit-withdraw">Withdraw to M-Pesa</button>
+        <button class="btn btn-outline" id="cancel-withdraw">Cancel</button>
     </div>
 </div>
 
@@ -507,8 +507,8 @@
             <label>Amount (KES)</label>
             <input type="number" id="deposit-amount" placeholder="e.g. 100" min="10" max="100000">
         </div>
-        <button class="btn btn-primary" onclick="submitDeposit()">Send STK Push</button>
-        <button class="btn btn-outline" onclick="hideDepositModal()">Cancel</button>
+        <button class="btn btn-primary" id="submit-deposit">Send STK Push</button>
+        <button class="btn btn-outline" id="cancel-deposit">Cancel</button>
     </div>
 </div>
 
@@ -518,7 +518,7 @@
         <div class="overlay-icon" id="result-icon">🎮</div>
         <div class="overlay-title" id="result-title">GAME OVER</div>
         <div class="overlay-sub" id="result-sub"></div>
-        <button class="btn btn-primary" onclick="dismissResult()">Play Again</button>
+        <button class="btn btn-primary" id="dismiss-result">Play Again</button>
     </div>
 </div>
 
@@ -526,358 +526,465 @@
 <div id="toast"></div>
 
 <script>
-    const socket = io();
-    let myPhone = null;
-    let gameId = null;
-    let mySymbol = null;
-    let currentTurn = 'X';
-    let board = Array(9).fill(null);
-    let gameActive = false;
+    (function() {
+        // --- STATE ---
+        let socket;
+        let myPhone = null;
+        let gameId = null;
+        let mySymbol = null;
+        let currentTurn = 'X';
+        let board = Array(9).fill(null);
+        let gameActive = false;
+        let authCompleted = false;
 
-    // DEBUG: Log socket connection
-    console.log('🚀 Socket initialized');
-    socket.on('connect', () => console.log('✅ Socket connected:', socket.id));
-    socket.on('disconnect', () => console.log('❌ Socket disconnected'));
+        // --- DOM ELEMENTS ---
+        const $ = id => document.getElementById(id);
+        const loginScreen = $('login-screen');
+        const gameScreen  = $('game-screen');
+        const boardWrap   = $('board-wrap');
+        const playBtn     = $('play-btn');
+        const cancelBtn   = $('cancel-btn');
+        const statusEl    = $('status');
+        const balanceEl   = $('balance');
+        const boardEl     = $('board');
+        const overlayEl   = $('result-overlay');
+        const loginBtn    = $('login-btn');
+        const logoutBtn   = $('logout-btn');
+        const depositBtn  = $('deposit-btn');
+        const withdrawBtn = $('withdraw-btn');
 
-    const $ = id => document.getElementById(id);
-    const loginScreen = $('login-screen');
-    const gameScreen  = $('game-screen');
-    const boardWrap   = $('board-wrap');
-    const playBtn     = $('play-btn');
-    const statusEl    = $('status');
-    const balanceEl   = $('balance');
-    const boardEl     = $('board');
-    const overlayEl   = $('result-overlay');
-
-    function initBoard() {
-        boardEl.innerHTML = '';
-        for (let i = 0; i < 9; i++) {
-            const cell = document.createElement('div');
-            cell.className = 'cell';
-            cell.dataset.index = i;
-            cell.addEventListener('click', () => makeMove(i));
-            boardEl.appendChild(cell);
-        }
-    }
-    initBoard();
-
-    function login() {
-        const raw = $('phone-input').value.trim();
-        console.log('🔐 Login attempt with phone:', raw);
-        if (!raw) return showToast('Enter your phone number', 'fail');
-        socket.emit('auth', { phone: raw });
-    }
-
-    function logout() {
-        console.log('🚪 Logout');
-        socket.disconnect();
-        myPhone = null;
-        gameActive = false;
-        gameScreen.classList.add('hidden');
-        loginScreen.classList.remove('hidden');
-    }
-
-    function showDepositModal() { $('deposit-modal').classList.remove('hidden'); }
-    function hideDepositModal() { $('deposit-modal').classList.add('hidden'); }
-
-    function showWithdrawModal() {
-        $('withdraw-balance-hint').textContent = `Available: ${balanceEl.textContent}`;
-        $('withdraw-modal').classList.remove('hidden');
-    }
-    function hideWithdrawModal() {
-        $('withdraw-modal').classList.add('hidden');
-        $('withdraw-amount').value = '';
-    }
-
-    async function submitWithdraw() {
-        const amount = parseInt($('withdraw-amount').value, 10);
-        if (!amount || amount < 10) return showToast('Minimum withdrawal is KES 10', 'fail');
-
-        try {
-            const res = await fetch('/mpesa/withdraw', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ phone: myPhone, amount }),
+        // --- INITIALIZE SOCKET ---
+        function initSocket() {
+            if (socket) {
+                socket.removeAllListeners();
+                socket.disconnect();
+            }
+            
+            socket = io({
+                transports: ['websocket', 'polling'],
+                reconnection: true,
+                reconnectionAttempts: 10,
+                reconnectionDelay: 1000
             });
-            const data = await res.json();
-            if (res.ok) {
-                showToast(data.msg, 'success');
-                hideWithdrawModal();
-            } else {
-                showToast(data.error || 'Withdrawal failed', 'fail');
-            }
-        } catch {
-            showToast('Network error. Try again.', 'fail');
-        }
-    }
 
-    async function submitDeposit() {
-        const amount = parseInt($('deposit-amount').value, 10);
-        if (!amount || amount < 10) return showToast('Minimum deposit is KES 10', 'fail');
+            console.log('🚀 Socket initializing...');
 
-        try {
-            const res = await fetch('/mpesa/deposit', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ phone: myPhone, amount }),
+            socket.on('connect', () => {
+                console.log('✅ Socket connected:', socket.id);
+                // If we have a phone number but auth wasn't completed, re-authenticate
+                if (myPhone && !authCompleted) {
+                    console.log('🔄 Re-authenticating with phone:', myPhone);
+                    socket.emit('auth', { phone: myPhone });
+                }
             });
-            const data = await res.json();
-            if (res.ok) {
-                showToast(data.msg, 'success');
-                hideDepositModal();
-            } else {
-                showToast(data.error || 'Deposit failed', 'fail');
-            }
-        } catch {
-            showToast('Network error. Try again.', 'fail');
-        }
-    }
 
-    function findMatch() {
-        console.log('🎮 Find match clicked!');
-        console.log('📱 myPhone:', myPhone);
-        console.log('🔌 Socket connected:', socket.connected);
-        
-        if (!myPhone) {
-            console.log('❌ No phone number');
-            return showToast('Not authenticated', 'fail');
-        }
-        
-        playBtn.disabled = true;
-        setStatus('Searching for opponent', 'active', true);
-        console.log('📤 Emitting find_match event');
-        socket.emit('find_match');
-    }
-
-    function cancelSearch() {
-        console.log('❌ Cancel search clicked');
-        socket.emit('cancel_search');
-    }
-
-    function makeMove(index) {
-        if (!gameActive) return;
-        if (currentTurn !== mySymbol) return;
-        if (board[index]) return;
-        console.log(`🎲 Making move at index ${index}`);
-        socket.emit('make_move', { gameId, index });
-    }
-
-    function applyMove(index, symbol) {
-        board[index] = symbol;
-        const cell = boardEl.children[index];
-        cell.textContent = symbol;
-        cell.className = `cell ${symbol.toLowerCase()}`;
-        cell.classList.remove('clickable');
-    }
-
-    function updateTurnIndicators() {
-        $('indicator-x').classList.toggle('active-turn', currentTurn === 'X');
-        $('indicator-o').classList.toggle('active-turn', currentTurn === 'O');
-
-        if (!gameActive) return;
-        if (currentTurn === mySymbol) {
-            setStatus('Your turn', 'active');
-            [...boardEl.children].forEach((c, i) => {
-                if (!board[i]) c.classList.add('clickable');
+            socket.on('disconnect', (reason) => {
+                console.log('❌ Socket disconnected:', reason);
+                authCompleted = false;
+                if (gameActive) {
+                    showToast('Connection lost. Reconnecting...', 'warn');
+                }
             });
-        } else {
-            setStatus("Opponent's turn...", '');
-            [...boardEl.children].forEach(c => c.classList.remove('clickable'));
-        }
-    }
 
-    function highlightWinCells(symbol) {
-        const wins = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
-        const b = [...boardEl.children].map(c => c.textContent || null);
-        for (const [a, bc, c] of wins) {
-            if (b[a] === symbol && b[bc] === symbol && b[c] === symbol) {
-                [a, bc, c].forEach(i => boardEl.children[i].classList.add('win-cell'));
+            socket.on('connect_error', (err) => {
+                console.log('❌ Connection error:', err);
+                showToast('Connection error. Check your internet.', 'fail');
+            });
+
+            // --- SOCKET EVENT HANDLERS ---
+            socket.on('auth_success', ({ balance }) => {
+                authCompleted = true;
+                myPhone = $('phone-input').value.trim();
+                console.log('✅ Auth success! Phone:', myPhone, 'Balance:', balance);
+                $('wallet-phone').textContent = myPhone;
+                updateBalance(balance);
+                loginScreen.classList.add('hidden');
+                gameScreen.classList.remove('hidden');
+                setStatus('Ready to play', '');
+            });
+
+            socket.on('balance_update', ({ balance }) => {
+                console.log('💰 Balance update:', balance);
+                updateBalance(balance);
+            });
+
+            socket.on('online_count', ({ online, searching }) => {
+                console.log(`📊 Online: ${online}, Searching: ${searching}`);
+                $('online-count').textContent = online;
+                $('searching-count').textContent = searching;
+            });
+
+            socket.on('waiting', () => {
+                console.log('⏳ Waiting for opponent...');
+                setStatus('Searching for opponent', 'active', true);
+                playBtn.classList.add('hidden');
+                cancelBtn.classList.remove('hidden');
+            });
+
+            socket.on('search_cancelled', () => {
+                console.log('❌ Search cancelled');
+                setStatus('Ready to play', '');
+                playBtn.disabled = false;
+                playBtn.classList.remove('hidden');
+                cancelBtn.classList.add('hidden');
+                showToast('Search cancelled — KES 50 refunded', 'warn');
+            });
+
+            socket.on('demo_bonus', ({ amount }) => {
+                console.log('🎉 Demo bonus:', amount);
+                showToast(`🎉 KES ${amount} free demo balance added!`, 'success');
+            });
+
+            socket.on('match_found', ({ gameId: gId, playerX, playerO }) => {
+                console.log('✅ MATCH FOUND! Game:', gId);
+                cancelBtn.classList.add('hidden');
+                gameId = gId;
+                mySymbol = (socket.id === playerX) ? 'X' : 'O';
+                currentTurn = 'X';
+                board = Array(9).fill(null);
+                gameActive = true;
+
+                if (mySymbol === 'X') {
+                    $('indicator-x').querySelector('span:last-child').textContent = 'YOU';
+                    $('indicator-o').querySelector('span:first-child').textContent = 'OPP';
+                } else {
+                    $('indicator-x').querySelector('span:last-child').textContent = 'OPP';
+                    $('indicator-o').querySelector('span:first-child').textContent = 'YOU';
+                }
+
+                initBoard();
+                boardWrap.classList.remove('hidden');
+                playBtn.classList.add('hidden');
+                updateTurnIndicators();
+                showToast('Match found! Game starting...', 'success');
+            });
+
+            socket.on('move_made', ({ index, symbol, nextTurn }) => {
+                console.log(`🎲 Move made: ${symbol} at ${index}`);
+                applyMove(index, symbol);
+                currentTurn = nextTurn;
+                updateTurnIndicators();
+            });
+
+            socket.on('game_finished', ({ result, winner, winnerSocketId, prize, refund }) => {
+                console.log('🏁 Game finished:', result);
+                gameActive = false;
+                [...boardEl.children].forEach(c => c.classList.remove('clickable'));
+
+                if (result === 'DRAW') {
+                    showResult('🤝', 'DRAW', `KES ${refund} refunded to your wallet`);
+                    setStatus('Draw — entry fee refunded', 'warn');
+                } else if (result === 'FORFEIT') {
+                    showResult('🏆', 'VICTORY', `Opponent disconnected — KES ${prize} credited`);
+                    setStatus(`Opponent forfeited — KES ${prize} won`, 'active');
+                } else {
+                    const iWon = winnerSocketId === socket.id;
+                    if (iWon) {
+                        highlightWinCells(winner);
+                        showResult('💰', 'VICTORY!', `KES ${prize} added to your wallet`);
+                        setStatus(`You won KES ${prize}!`, 'active');
+                    } else {
+                        highlightWinCells(winner);
+                        showResult('❌', 'DEFEAT', 'Better luck next time');
+                        setStatus('You lost this round', 'error');
+                    }
+                }
+            });
+
+            socket.on('error_msg', msg => {
+                console.log('❌ Error:', msg);
+                showToast(msg, 'fail');
+                if (!gameActive) {
+                    playBtn.disabled = false;
+                    setStatus('Ready to play', '');
+                }
+            });
+
+            socket.on('info_msg', msg => {
+                console.log('ℹ️ Info:', msg);
+                showToast(msg, '');
+            });
+
+            socket.on('withdrawal_success', ({ amount }) => {
+                showToast(`KES ${amount} sent to your M-Pesa!`, 'success');
+            });
+
+            socket.on('withdrawal_failed', ({ reason }) => {
+                showToast(`Withdrawal failed: ${reason}`, 'fail');
+            });
+        }
+
+        // --- GAME FUNCTIONS ---
+        function initBoard() {
+            boardEl.innerHTML = '';
+            for (let i = 0; i < 9; i++) {
+                const cell = document.createElement('div');
+                cell.className = 'cell';
+                cell.dataset.index = i;
+                cell.addEventListener('click', () => makeMove(i));
+                boardEl.appendChild(cell);
             }
         }
-    }
 
-    function showResult(icon, title, sub) {
-        $('result-icon').textContent = icon;
-        $('result-title').textContent = title;
-        $('result-sub').textContent = sub;
-        overlayEl.classList.remove('hidden');
-    }
-
-    function dismissResult() {
-        overlayEl.classList.add('hidden');
-        resetGameState();
-    }
-
-    function resetGameState() {
-        gameId = null;
-        mySymbol = null;
-        gameActive = false;
-        board = Array(9).fill(null);
-        currentTurn = 'X';
-        initBoard();
-        boardWrap.classList.add('hidden');
-        playBtn.classList.remove('hidden');
-        playBtn.disabled = false;
-        document.getElementById('cancel-btn').classList.add('hidden');
-        $('indicator-x').classList.remove('active-turn');
-        $('indicator-o').classList.remove('active-turn');
-        setStatus('Ready to play', '');
-    }
-
-    function setStatus(msg, type = '', searching = false) {
-        statusEl.className = type ? `active ${type}` : '';
-        statusEl.innerHTML = searching
-            ? `<span class="searching-dots">${msg}</span>`
-            : msg;
-    }
-
-    function updateBalance(value) {
-        const formatted = `KES ${parseFloat(value).toFixed(2)}`;
-        balanceEl.textContent = formatted;
-        balanceEl.classList.add('credit');
-        setTimeout(() => balanceEl.classList.remove('credit'), 600);
-    }
-
-    let toastTimer;
-    function showToast(msg, type = '') {
-        const t = $('toast');
-        t.textContent = msg;
-        t.className = `show ${type}`;
-        clearTimeout(toastTimer);
-        toastTimer = setTimeout(() => { t.className = ''; }, 3500);
-    }
-
-    // Socket Events
-    socket.on('auth_success', ({ balance }) => {
-        myPhone = $('phone-input').value.trim();
-        console.log('✅ Auth success! Phone:', myPhone, 'Balance:', balance);
-        $('wallet-phone').textContent = myPhone;
-        updateBalance(balance);
-        loginScreen.classList.add('hidden');
-        gameScreen.classList.remove('hidden');
-        setStatus('Ready to play', '');
-    });
-
-    socket.on('balance_update', ({ balance }) => {
-        console.log('💰 Balance update:', balance);
-        updateBalance(balance);
-    });
-
-    socket.on('online_count', ({ online, searching }) => {
-        console.log(`📊 Online: ${online}, Searching: ${searching}`);
-        const onlineEl = document.getElementById('online-count');
-        const searchingEl = document.getElementById('searching-count');
-        if (onlineEl) onlineEl.textContent = online;
-        if (searchingEl) searchingEl.textContent = searching;
-    });
-
-    socket.on('waiting', () => {
-        console.log('⏳ Waiting for opponent...');
-        setStatus('Searching for opponent', 'active', true);
-        playBtn.classList.add('hidden');
-        document.getElementById('cancel-btn').classList.remove('hidden');
-    });
-
-    socket.on('search_cancelled', () => {
-        console.log('❌ Search cancelled');
-        setStatus('Ready to play', '');
-        playBtn.disabled = false;
-        playBtn.classList.remove('hidden');
-        document.getElementById('cancel-btn').classList.add('hidden');
-        showToast('Search cancelled — KES 50 refunded', 'warn');
-    });
-
-    socket.on('demo_bonus', ({ amount }) => {
-        console.log('🎉 Demo bonus:', amount);
-        showToast(`🎉 KES ${amount} free demo balance added!`, 'success');
-    });
-
-    socket.on('match_found', ({ gameId: gId, playerX, playerO }) => {
-        console.log('✅ MATCH FOUND! Game:', gId);
-        document.getElementById('cancel-btn').classList.add('hidden');
-        gameId = gId;
-        mySymbol = (socket.id === playerX) ? 'X' : 'O';
-        currentTurn = 'X';
-        board = Array(9).fill(null);
-        gameActive = true;
-
-        if (mySymbol === 'X') {
-            $('indicator-x').querySelector('span:last-child').textContent = 'YOU';
-            $('indicator-o').querySelector('span:first-child').textContent = 'OPP';
-        } else {
-            $('indicator-x').querySelector('span:last-child').textContent = 'OPP';
-            $('indicator-o').querySelector('span:first-child').textContent = 'YOU';
+        function makeMove(index) {
+            if (!gameActive) return;
+            if (currentTurn !== mySymbol) return;
+            if (board[index]) return;
+            console.log(`🎲 Making move at index ${index}`);
+            socket.emit('make_move', { gameId, index });
         }
 
-        initBoard();
-        boardWrap.classList.remove('hidden');
-        playBtn.classList.add('hidden');
-        updateTurnIndicators();
-        showToast('Match found! Game starting...', 'success');
-    });
+        function applyMove(index, symbol) {
+            board[index] = symbol;
+            const cell = boardEl.children[index];
+            cell.textContent = symbol;
+            cell.className = `cell ${symbol.toLowerCase()}`;
+            cell.classList.remove('clickable');
+        }
 
-    socket.on('move_made', ({ index, symbol, nextTurn }) => {
-        console.log(`🎲 Move made: ${symbol} at ${index}`);
-        applyMove(index, symbol);
-        currentTurn = nextTurn;
-        updateTurnIndicators();
-    });
+        function updateTurnIndicators() {
+            $('indicator-x').classList.toggle('active-turn', currentTurn === 'X');
+            $('indicator-o').classList.toggle('active-turn', currentTurn === 'O');
 
-    socket.on('game_finished', ({ result, winner, winnerSocketId, prize, refund }) => {
-        console.log('🏁 Game finished:', result);
-        gameActive = false;
-        [...boardEl.children].forEach(c => c.classList.remove('clickable'));
-
-        if (result === 'DRAW') {
-            showResult('🤝', 'DRAW', `KES ${refund} refunded to your wallet`);
-            setStatus('Draw — entry fee refunded', 'warn');
-        } else if (result === 'FORFEIT') {
-            showResult('🏆', 'VICTORY', `Opponent disconnected — KES ${prize} credited`);
-            setStatus(`Opponent forfeited — KES ${prize} won`, 'active');
-        } else {
-            const iWon = winnerSocketId === socket.id;
-            if (iWon) {
-                highlightWinCells(winner);
-                showResult('💰', 'VICTORY!', `KES ${prize} added to your wallet`);
-                setStatus(`You won KES ${prize}!`, 'active');
+            if (!gameActive) return;
+            if (currentTurn === mySymbol) {
+                setStatus('Your turn', 'active');
+                [...boardEl.children].forEach((c, i) => {
+                    if (!board[i]) c.classList.add('clickable');
+                });
             } else {
-                highlightWinCells(winner);
-                showResult('❌', 'DEFEAT', 'Better luck next time');
-                setStatus('You lost this round', 'error');
+                setStatus("Opponent's turn...", '');
+                [...boardEl.children].forEach(c => c.classList.remove('clickable'));
             }
         }
-    });
 
-    socket.on('error_msg', msg => {
-        console.log('❌ Error:', msg);
-        showToast(msg, 'fail');
-        if (!gameActive) {
+        function highlightWinCells(symbol) {
+            const wins = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+            const b = [...boardEl.children].map(c => c.textContent || null);
+            for (const [a, bc, c] of wins) {
+                if (b[a] === symbol && b[bc] === symbol && b[c] === symbol) {
+                    [a, bc, c].forEach(i => boardEl.children[i].classList.add('win-cell'));
+                }
+            }
+        }
+
+        function showResult(icon, title, sub) {
+            $('result-icon').textContent = icon;
+            $('result-title').textContent = title;
+            $('result-sub').textContent = sub;
+            overlayEl.classList.remove('hidden');
+        }
+
+        function dismissResult() {
+            overlayEl.classList.add('hidden');
+            resetGameState();
+        }
+
+        function resetGameState() {
+            gameId = null;
+            mySymbol = null;
+            gameActive = false;
+            board = Array(9).fill(null);
+            currentTurn = 'X';
+            initBoard();
+            boardWrap.classList.add('hidden');
+            playBtn.classList.remove('hidden');
             playBtn.disabled = false;
+            cancelBtn.classList.add('hidden');
+            $('indicator-x').classList.remove('active-turn');
+            $('indicator-o').classList.remove('active-turn');
             setStatus('Ready to play', '');
         }
-    });
 
-    socket.on('info_msg', msg => {
-        console.log('ℹ️ Info:', msg);
-        showToast(msg, '');
-    });
+        function setStatus(msg, type = '', searching = false) {
+            statusEl.className = type ? `active ${type}` : '';
+            statusEl.innerHTML = searching
+                ? `<span class="searching-dots">${msg}</span>`
+                : msg;
+        }
 
-    socket.on('withdrawal_success', ({ amount }) => {
-        showToast(`KES ${amount} sent to your M-Pesa!`, 'success');
-    });
+        function updateBalance(value) {
+            const formatted = `KES ${parseFloat(value).toFixed(2)}`;
+            balanceEl.textContent = formatted;
+            balanceEl.classList.add('credit');
+            setTimeout(() => balanceEl.classList.remove('credit'), 600);
+        }
 
-    socket.on('withdrawal_failed', ({ reason }) => {
-        showToast(`Withdrawal failed: ${reason}`, 'fail');
-    });
+        let toastTimer;
+        function showToast(msg, type = '') {
+            const t = $('toast');
+            t.textContent = msg;
+            t.className = `show ${type}`;
+            clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => { t.className = ''; }, 3500);
+        }
 
-    // Enter key support
-    $('phone-input').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
-    $('deposit-amount').addEventListener('keydown', e => { if (e.key === 'Enter') submitDeposit(); });
-    $('withdraw-amount').addEventListener('keydown', e => { if (e.key === 'Enter') submitWithdraw(); });
-    
-    // Debug: Check if button works
-    console.log('🔍 Play button element:', playBtn);
-    console.log('🔍 Play button onclick:', playBtn.onclick);
+        // --- USER ACTIONS ---
+        function login() {
+            const raw = $('phone-input').value.trim();
+            console.log('🔐 Login attempt with phone:', raw);
+            if (!raw) return showToast('Enter your phone number', 'fail');
+            myPhone = raw;
+            authCompleted = false;
+            
+            // Ensure socket is connected before emitting
+            if (!socket.connected) {
+                console.log('Socket not connected, connecting...');
+                socket.connect();
+                setTimeout(() => {
+                    socket.emit('auth', { phone: raw });
+                }, 500);
+            } else {
+                socket.emit('auth', { phone: raw });
+            }
+        }
+
+        function logout() {
+            console.log('🚪 Logout');
+            socket.disconnect();
+            myPhone = null;
+            gameActive = false;
+            authCompleted = false;
+            gameScreen.classList.add('hidden');
+            loginScreen.classList.remove('hidden');
+            // Re-initialize socket for fresh start
+            setTimeout(() => initSocket(), 100);
+        }
+
+        function findMatch() {
+            console.log('🎮 findMatch() called');
+            console.log('📱 myPhone:', myPhone);
+            console.log('🔌 socket.connected:', socket?.connected);
+            console.log('✅ authCompleted:', authCompleted);
+            
+            if (!myPhone) {
+                console.log('❌ No phone number - not authenticated');
+                showToast('Not authenticated', 'fail');
+                return;
+            }
+            
+            if (!socket?.connected) {
+                console.log('❌ Socket not connected - attempting reconnect');
+                socket.connect();
+                showToast('Reconnecting... Try again in a moment', 'warn');
+                setTimeout(() => {
+                    if (socket.connected) {
+                        findMatch();
+                    }
+                }, 1000);
+                return;
+            }
+            
+            playBtn.disabled = true;
+            setStatus('Searching for opponent', 'active', true);
+            
+            console.log('📤 Emitting find_match event');
+            socket.emit('find_match');
+        }
+
+        function cancelSearch() {
+            console.log('❌ Cancel search clicked');
+            socket.emit('cancel_search');
+        }
+
+        // --- MODAL HANDLERS ---
+        function showDepositModal() { $('deposit-modal').classList.remove('hidden'); }
+        function hideDepositModal() { $('deposit-modal').classList.add('hidden'); }
+        function showWithdrawModal() {
+            $('withdraw-balance-hint').textContent = `Available: ${balanceEl.textContent}`;
+            $('withdraw-modal').classList.remove('hidden');
+        }
+        function hideWithdrawModal() {
+            $('withdraw-modal').classList.add('hidden');
+            $('withdraw-amount').value = '';
+        }
+
+        async function submitWithdraw() {
+            const amount = parseInt($('withdraw-amount').value, 10);
+            if (!amount || amount < 10) return showToast('Minimum withdrawal is KES 10', 'fail');
+            try {
+                const res = await fetch('/mpesa/withdraw', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phone: myPhone, amount }),
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    showToast(data.msg, 'success');
+                    hideWithdrawModal();
+                } else {
+                    showToast(data.error || 'Withdrawal failed', 'fail');
+                }
+            } catch {
+                showToast('Network error. Try again.', 'fail');
+            }
+        }
+
+        async function submitDeposit() {
+            const amount = parseInt($('deposit-amount').value, 10);
+            if (!amount || amount < 10) return showToast('Minimum deposit is KES 10', 'fail');
+            try {
+                const res = await fetch('/mpesa/deposit', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phone: myPhone, amount }),
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    showToast(data.msg, 'success');
+                    hideDepositModal();
+                } else {
+                    showToast(data.error || 'Deposit failed', 'fail');
+                }
+            } catch {
+                showToast('Network error. Try again.', 'fail');
+            }
+        }
+
+        // --- INITIALIZE EVERYTHING ---
+        function bindEvents() {
+            loginBtn.addEventListener('click', login);
+            logoutBtn.addEventListener('click', logout);
+            
+            // Use event listeners instead of inline onclick for reliability
+            playBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                findMatch();
+            });
+            
+            cancelBtn.addEventListener('click', cancelSearch);
+            depositBtn.addEventListener('click', showDepositModal);
+            withdrawBtn.addEventListener('click', showWithdrawModal);
+            
+            $('submit-deposit').addEventListener('click', submitDeposit);
+            $('cancel-deposit').addEventListener('click', hideDepositModal);
+            $('submit-withdraw').addEventListener('click', submitWithdraw);
+            $('cancel-withdraw').addEventListener('click', hideWithdrawModal);
+            $('dismiss-result').addEventListener('click', dismissResult);
+            
+            $('phone-input').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
+            $('deposit-amount').addEventListener('keydown', e => { if (e.key === 'Enter') submitDeposit(); });
+            $('withdraw-amount').addEventListener('keydown', e => { if (e.key === 'Enter') submitWithdraw(); });
+            
+            console.log('✅ All event listeners bound');
+        }
+
+        // Start everything
+        initSocket();
+        initBoard();
+        bindEvents();
+        
+        // Debug check
+        console.log('🔍 Play button element:', playBtn);
+        console.log('🎮 Global findMatch attached to window');
+        window.findMatch = findMatch;
+        
+        // Extra safety: Force enable button
+        setTimeout(() => {
+            playBtn.disabled = false;
+            console.log('🔓 Play button force-enabled');
+        }, 500);
+    })();
 </script>
 </body>
 </html>
