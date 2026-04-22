@@ -17,14 +17,10 @@ const io = new Server(server, {
 });
 
 // ─── REDIS CLIENTS ────────────────────────────────────────────────────────
-if (!process.env.REDIS_URL) {
-    console.error('FATAL: REDIS_URL is not set.');
-    process.exit(1);
-}
-// Internal Render Redis — plain redis:// with keepAlive
+if (!process.env.REDIS_URL) { console.error('FATAL: REDIS_URL not set'); process.exit(1); }
 const redisOpts = {
     url: process.env.REDIS_URL,
-    socket: { keepAlive: 5000, reconnectStrategy: retries => Math.min(retries * 100, 3000) },
+    socket: { keepAlive: 5000, reconnectStrategy: r => Math.min(r * 200, 5000) },
 };
 const redis    = createClient(redisOpts);
 const redisPub = createClient(redisOpts);
@@ -382,70 +378,55 @@ async function start() {
         socket.on('find_match', async () => {
             if (!socket.phone) return socket.emit('error_msg', 'Not authenticated.');
             if (socket.searching) return;
-            socket.searching = true; // lock immediately to prevent race condition
+            socket.searching = true;
+            audit('find_match_attempt', { phone: socket.phone });
             try {
-            const deducted = await deductBalance(socket.phone, ENTRY_FEE);
-            if (!deducted) {
-                socket.searching = false;
-                return socket.emit('error_msg', `Insufficient balance. Min KES ${ENTRY_FEE} required.`);
-            }
-            const newBal = await getBalance(socket.phone);
-            socket.emit('balance_update', { balance: newBal.toFixed(2) });
+                const deducted = await deductBalance(socket.phone, ENTRY_FEE);
+                if (!deducted) {
+                    socket.searching = false;
+                    return socket.emit('error_msg', `Insufficient balance. Min KES ${ENTRY_FEE} required.`);
+                }
+                const newBal = await getBalance(socket.phone);
+                socket.emit('balance_update', { balance: newBal.toFixed(2) });
 
-            // Keep popping until we find a live opponent or the queue is empty
-            let matched = false;
-            while (true) {
-                const queueEntry = await redis.lPop('matchmaking_queue');
-                if (!queueEntry) break;
-
-                const [opponentPhone, opponentSocketId] = queueEntry.split('::');
-
-                // Skip stale entries (same player re-queued, or disconnected opponent)
-                if (opponentPhone === socket.phone || opponentSocketId === socket.id) {
-                    await creditBalance(opponentPhone, ENTRY_FEE);
-                    continue;
+                let matched = false;
+                while (true) {
+                    const queueEntry = await redis.lPop('matchmaking_queue');
+                    if (!queueEntry) break;
+                    const [opponentPhone, opponentSocketId] = queueEntry.split('::');
+                    if (opponentPhone === socket.phone || opponentSocketId === socket.id) {
+                        await creditBalance(opponentPhone, ENTRY_FEE);
+                        continue;
+                    }
+                    const opponentSocket = io.sockets.sockets.get(opponentSocketId);
+                    if (!opponentSocket || !opponentSocket.searching) {
+                        await creditBalance(opponentPhone, ENTRY_FEE);
+                        continue;
+                    }
+                    opponentSocket.searching = false;
+                    socket.searching = false;
+                    const gameId = `game_${crypto.randomUUID()}`;
+                    socket.join(gameId);
+                    opponentSocket.join(gameId);
+                    const game = {
+                        board: Array(9).fill(null),
+                        players: { X: socket.phone, O: opponentPhone },
+                        sockets: { X: socket.id, O: opponentSocketId },
+                        currentTurn: 'X',
+                    };
+                    await saveGame(gameId, game);
+                    audit('game_started', { gameId, playerX: socket.phone, playerO: opponentPhone });
+                    io.to(gameId).emit('match_found', { gameId, playerX: socket.id, playerO: opponentSocketId });
+                    await broadcastOnlineCount();
+                    matched = true;
+                    break;
                 }
 
-                const opponentSocket = io.sockets.sockets.get(opponentSocketId);
-                if (!opponentSocket || !opponentSocket.searching) {
-                    // Opponent gone or cancelled — refund them and keep looking
-                    await creditBalance(opponentPhone, ENTRY_FEE);
-                    continue;
+                if (!matched) {
+                    await redis.rPush('matchmaking_queue', `${socket.phone}::${socket.id}`);
+                    socket.emit('waiting', {});
+                    await broadcastOnlineCount();
                 }
-
-                // Valid match found
-                opponentSocket.searching = false;
-                socket.searching = false;
-
-                const gameId = `game_${crypto.randomUUID()}`;
-                socket.join(gameId);
-                opponentSocket.join(gameId);
-
-                const game = {
-                    board: Array(9).fill(null),
-                    players: { X: socket.phone, O: opponentPhone },
-                    sockets: { X: socket.id, O: opponentSocketId },
-                    currentTurn: 'X',
-                };
-
-                await saveGame(gameId, game);
-                audit('game_started', { gameId, playerX: socket.phone, playerO: opponentPhone });
-
-                io.to(gameId).emit('match_found', {
-                    gameId,
-                    playerX: socket.id,
-                    playerO: opponentSocketId,
-                });
-                await broadcastOnlineCount();
-                matched = true;
-                break;
-            }
-
-            if (!matched) {
-                await redis.rPush('matchmaking_queue', `${socket.phone}::${socket.id}`);
-                socket.emit('waiting', {});
-                await broadcastOnlineCount();
-            }
             } catch (err) {
                 socket.searching = false;
                 audit('find_match_error', { phone: socket.phone, error: err.message });
