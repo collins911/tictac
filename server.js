@@ -13,17 +13,17 @@ const app    = express();
 const server = http.createServer(app);
 const io     = new Server(server, { transports: ['websocket', 'polling'] });
 
-// ─── REDIS (balances only) ────────────────────────────────────────────────
+// ─── REDIS ────────────────────────────────────────────────────────────────
 const redis = createClient({ url: process.env.REDIS_URL });
 redis.on('error',   e => console.error('Redis error:', e.message));
 redis.on('connect', () => console.log('Redis connected'));
 
 // ─── IN-MEMORY STATE ──────────────────────────────────────────────────────
-let   waitingSocket = null;          // single socket waiting for opponent
-const games         = new Map();     // gameId -> game object
-const balances      = new Map();     // phone  -> balance (fallback if Redis down)
+let   waitingSocket = null;
+const games         = new Map();
+const balances      = new Map();
 
-// ─── SECURITY ────────────────────────────────────────────────────────────
+// ─── SECURITY & MIDDLEWARE ───────────────────────────────────────────────
 app.use(helmet({
     contentSecurityPolicy: {
         directives: {
@@ -41,28 +41,15 @@ app.use(helmet({
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// ─── RATE LIMITING ────────────────────────────────────────────────────────
-const depositLimiter  = rateLimit({ windowMs: 60000, max: 5,  message: { error: 'Too many deposit attempts.' } });
-const withdrawLimiter = rateLimit({ windowMs: 60000, max: 3,  message: { error: 'Too many withdrawal attempts.' } });
-
 // ─── CONSTANTS ────────────────────────────────────────────────────────────
-const ENTRY_FEE   = 50;
-const WIN_PRIZE   = 85;
-const DRAW_REFUND = 50;
-const WITHDRAW_FEE = 10;
-const DEMO_BONUS  = 1000;
-const WIN_COMBOS  = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
-
-// ─── INTASEND ─────────────────────────────────────────────────────────────
-const intasend = new IntaSend(
-    process.env.INTASEND_PUBLISHABLE_KEY,
-    process.env.INTASEND_SECRET_KEY,
-    process.env.NODE_ENV !== 'production'
-);
+const ENTRY_FEE    = 50;
+const WIN_PRIZE    = 85;
+const DRAW_REFUND  = 50;
+const DEMO_BONUS   = 1000;
+const WIN_COMBOS   = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────
-const audit = (event, data) =>
-    console.log(JSON.stringify({ timestamp: new Date().toISOString(), event, ...data }));
+const audit = (event, data) => console.log(JSON.stringify({ ts: new Date().toISOString(), event, ...data }));
 
 const normalizePhone = (phone) => {
     const c = String(phone).replace(/\D/g, '');
@@ -72,13 +59,6 @@ const normalizePhone = (phone) => {
     return null;
 };
 
-const validateAmount = (amount) => {
-    const p = parseInt(amount, 10);
-    if (!isFinite(p) || p <= 0 || p > 100000) return null;
-    return p;
-};
-
-// ─── BALANCE (Redis with in-memory fallback) ──────────────────────────────
 const getBalance = async (phone) => {
     try {
         if (redis.isReady) {
@@ -112,7 +92,6 @@ const creditBalance = async (phone, amount) => {
     return newBal;
 };
 
-// ─── ONLINE COUNT ─────────────────────────────────────────────────────────
 const broadcastOnlineCount = () => {
     const online    = io.sockets.sockets.size;
     const searching = waitingSocket ? 1 : 0;
@@ -124,34 +103,29 @@ io.on('connection', (socket) => {
     broadcastOnlineCount();
 
     socket.on('auth', async ({ phone }) => {
-        const normalizedPhone = normalizePhone(phone);
-        if (!normalizedPhone) return socket.emit('error_msg', 'Invalid phone number.');
-        socket.phone = normalizedPhone;
-        const bal = await getBalance(normalizedPhone);
-        if (bal < ENTRY_FEE) {
-            await creditBalance(normalizedPhone, DEMO_BONUS);
-            audit('demo_topup', { phone: normalizedPhone });
-            socket.emit('demo_bonus', { amount: DEMO_BONUS });
-        }
-        const updatedBal = await getBalance(normalizedPhone);
-        socket.emit('auth_success', { balance: updatedBal.toFixed(2) });
+        const normalized = normalizePhone(phone);
+        if (!normalized) return socket.emit('error_msg', 'Invalid phone number.');
+        socket.phone = normalized;
+        const bal = await getBalance(normalized);
+        if (bal < ENTRY_FEE) await creditBalance(normalized, DEMO_BONUS);
+        const finalBal = await getBalance(normalized);
+        socket.emit('auth_success', { balance: finalBal.toFixed(2) });
     });
 
     socket.on('find_match', async () => {
         if (!socket.phone) return socket.emit('error_msg', 'Not authenticated.');
         if (socket.searching) return;
 
-        // 🔴 FIX: Debug Logging
-        console.log(`[find_match] socket.phone=${socket.phone}, searching=${socket.searching}, waitingSocket=${waitingSocket?.id}`);
+        // DEBUG: Track matchmaking attempts
+        console.log(`[match] phone=${socket.phone} searching=${socket.searching} waiting=${waitingSocket?.id}`);
 
         socket.searching = true;
 
-        // 🔴 FIX: Wrapped in try-finally to ensure state reset on error
         try {
             const deducted = await deductBalance(socket.phone, ENTRY_FEE);
             if (!deducted) {
                 socket.searching = false;
-                return socket.emit('error_msg', `Insufficient balance. Need KES ${ENTRY_FEE}.`);
+                return socket.emit('error_msg', `Insufficient balance. Need KES ${ENTRY_FEE}`);
             }
 
             if (waitingSocket && waitingSocket.id !== socket.id && waitingSocket.searching) {
@@ -175,15 +149,10 @@ io.on('connection', (socket) => {
                 };
                 games.set(gameId, game);
 
-                io.to(gameId).emit('match_found', { 
-                    gameId, 
-                    opponent: { X: opponent.phone, O: socket.phone }
-                });
-
+                io.to(gameId).emit('match_found', { gameId, players: game.players });
                 opponent.emit('init_game', { symbol: 'X', turn: 'X' });
                 socket.emit('init_game', { symbol: 'O', turn: 'X' });
                 
-                audit('game_started', { gameId, playerX: opponent.phone, playerO: socket.phone });
                 broadcastOnlineCount();
             } else {
                 waitingSocket = socket;
@@ -194,18 +163,6 @@ io.on('connection', (socket) => {
             console.error("Matchmaking error:", err);
             socket.searching = false; 
         }
-    });
-
-    socket.on('cancel_search', async () => {
-        if (!socket.searching) return;
-        if (waitingSocket && waitingSocket.id === socket.id) waitingSocket = null;
-        socket.searching = false;
-        await creditBalance(socket.phone, ENTRY_FEE);
-        const bal = await getBalance(socket.phone);
-        socket.emit('balance_update', { balance: bal.toFixed(2) });
-        socket.emit('search_cancelled', {});
-        audit('search_cancelled', { phone: socket.phone });
-        broadcastOnlineCount();
     });
 
     socket.on('make_move', ({ gameId, index }) => {
@@ -235,8 +192,7 @@ io.on('connection', (socket) => {
         }
         for (const [gameId, game] of games.entries()) {
             if (game.sockets.X === socket.id || game.sockets.O === socket.id) {
-                const opponentSymbol = game.sockets.X === socket.id ? 'O' : 'X';
-                finishGame(gameId, game, opponentSymbol);
+                finishGame(gameId, game, game.sockets.X === socket.id ? 'O' : 'X');
                 break;
             }
         }
@@ -254,32 +210,24 @@ function checkWinner(board) {
 async function finishGame(gameId, game, result) {
     games.delete(gameId);
 
-    // 🔴 FIX: Explicitly clean up socket game references 
     const sX = io.sockets.sockets.get(game.sockets.X);
     const sO = io.sockets.sockets.get(game.sockets.O);
+    
+    // Explicitly reset flags for both players
     if (sX) { sX.searching = false; sX.leave(gameId); }
     if (sO) { sO.searching = false; sO.leave(gameId); }
 
     if (result === 'DRAW') {
-        await Promise.all([
-            creditBalance(game.players.X, DRAW_REFUND),
-            creditBalance(game.players.O, DRAW_REFUND)
-        ]);
-        const [balX, balO] = await Promise.all([
-            getBalance(game.players.X),
-            getBalance(game.players.O),
-        ]);
-        if (sX) sX.emit('balance_update', { balance: balX.toFixed(2) });
-        if (sO) sO.emit('balance_update', { balance: balO.toFixed(2) });
-        io.to(gameId).emit('game_finished', { result: 'DRAW', refund: DRAW_REFUND });
+        await Promise.all([creditBalance(game.players.X, DRAW_REFUND), creditBalance(game.players.O, DRAW_REFUND)]);
+        io.to(gameId).emit('game_finished', { result: 'DRAW', prize: DRAW_REFUND });
     } else {
         const winnerPhone = game.players[result];
-        const newBal = await creditBalance(winnerPhone, WIN_PRIZE);
-        const winnerSocket = io.sockets.sockets.get(game.sockets[result]);
-        if (winnerSocket) winnerSocket.emit('balance_update', { balance: newBal.toFixed(2) });
+        await creditBalance(winnerPhone, WIN_PRIZE);
         io.to(gameId).emit('game_finished', { result: 'WIN', winner: result, prize: WIN_PRIZE });
     }
-    broadcastOnlineCount();
+    
+    if (sX) sX.emit('balance_update', { balance: (await getBalance(game.players.X)).toFixed(2) });
+    if (sO) sO.emit('balance_update', { balance: (await getBalance(game.players.O)).toFixed(2) });
 }
 
 async function start() {

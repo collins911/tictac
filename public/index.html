@@ -1,88 +1,132 @@
-﻿// ... existing HTML above script tag ...
+﻿const socket = io();
+let myPhone = null;
+let gameId = null;
+let mySymbol = null;
+let gameActive = false;
+let board = Array(9).fill(null);
 
-<script>
-    const socket = io();
-    let myPhone = null;
-    let gameId = null;
-    let mySymbol = null;
-    let gameActive = false;
-    let board = Array(9).fill(null);
+const $ = id => document.getElementById(id);
+const playBtn = $('play-btn');
+const boardWrap = $('board-wrap');
+const cells = document.querySelectorAll('.cell');
 
-    const $ = id => document.getElementById(id);
-    const playBtn = $('play-btn');
-    const boardWrap = $('board-wrap');
+// ─── AUTH ───
+function login() {
+    const phone = $('phone-input').value.trim();
+    if (!phone) return showToast('Enter phone number', 'fail');
+    myPhone = phone;
+    socket.emit('auth', { phone });
+}
 
-    function findMatch() {
-        if (!myPhone) return showToast('Not authenticated', 'fail');
-        
-        playBtn.disabled = true;
-        setStatus('Searching for opponent', 'active', true);
-        socket.emit('find_match');
+socket.on('auth_success', ({ balance }) => {
+    $('wallet-balance').innerText = balance;
+    $('auth-screen').classList.add('hidden');
+    $('lobby-screen').classList.remove('hidden');
+});
 
-        // 🔴 FIX: Added Search Timeout to prevent stuck UI 
-        setTimeout(() => {
-            if (!gameActive && playBtn.disabled) {
-                playBtn.disabled = false;
-                setStatus('Ready to play', '');
-                showToast('Search timed out. Try again.', 'warn');
-            }
-        }, 10000); 
-    }
+// ─── MATCHMAKING ───
+function findMatch() {
+    if (!myPhone) return showToast('Not authenticated', 'fail');
+    
+    playBtn.disabled = true;
+    setStatus('Searching for opponent', 'active', true);
+    socket.emit('find_match');
 
-    socket.on('auth_success', ({ balance }) => {
-        myPhone = $('phone-input').value.trim(); // Simplified for brevity
-        $('wallet-balance').innerText = balance;
-        $('auth-screen').classList.add('hidden');
-        $('lobby-screen').classList.remove('hidden');
+    // UI Watchdog: Re-enable UI if server doesn't find match in 10s
+    setTimeout(() => {
+        if (!gameActive && playBtn.disabled) {
+            playBtn.disabled = false;
+            setStatus('Ready to play', '');
+            showToast('Search timed out. Try again.', 'warn');
+        }
+    }, 10000); 
+}
+
+socket.on('waiting', () => {
+    setStatus('Waiting for opponent...', 'active', true);
+});
+
+socket.on('match_found', (data) => {
+    gameId = data.gameId;
+    gameActive = true;
+    $('lobby-screen').classList.add('hidden');
+    boardWrap.classList.remove('hidden');
+});
+
+socket.on('init_game', ({ symbol, turn }) => {
+    mySymbol = symbol;
+    board = Array(9).fill(null);
+    renderBoard();
+    updateTurnUI(turn);
+});
+
+// ─── GAMEPLAY ───
+cells.forEach((cell, i) => {
+    cell.onclick = () => {
+        if (!gameActive || board[i] || !gameId) return;
+        socket.emit('make_move', { gameId, index: i });
+    };
+});
+
+socket.on('update_board', ({ board: newBoard, turn }) => {
+    board = newBoard;
+    renderBoard();
+    updateTurnUI(turn);
+});
+
+function renderBoard() {
+    cells.forEach((cell, i) => {
+        cell.innerText = board[i] || '';
+        cell.className = 'cell' + (board[i] ? ` taken ${board[i]}` : '');
     });
+}
 
-    socket.on('match_found', (data) => {
-        gameId = data.gameId;
-        gameActive = true;
-        $('lobby-screen').classList.add('hidden');
-        boardWrap.classList.remove('hidden');
-    });
+function updateTurnUI(turn) {
+    if (turn === mySymbol) setStatus("YOUR TURN", "active");
+    else if (turn) setStatus("OPPONENT'S TURN", "");
+}
 
-    socket.on('init_game', ({ symbol }) => {
-        mySymbol = symbol;
-        setStatus(`Game Started! You are ${symbol}`, 'active');
-    });
+// ─── END ───
+socket.on('game_finished', ({ result, winner, prize }) => {
+    gameActive = false;
+    if (result === 'DRAW') showToast(`Draw! Refund: KES ${prize}`, '');
+    else if (winner === mySymbol) showToast(`WINNER! +KES ${prize}`, 'success');
+    else showToast('DEFEAT', 'fail');
 
-    socket.on('update_board', ({ board: newBoard, turn }) => {
-        board = newBoard;
-        renderBoard();
-        if (turn === mySymbol) setStatus("Your Turn", "active");
-        else if (turn) setStatus("Opponent's Turn", "");
-    });
+    setTimeout(() => {
+        resetToLobby();
+    }, 3000);
+});
 
-    socket.on('game_finished', ({ result, winner, prize }) => {
-        gameActive = false;
-        if (result === 'DRAW') showToast("It's a draw!", "");
-        else if (winner === mySymbol) showToast(`Victory! Won KES ${prize}`, "success");
-        else showToast("Defeat!", "fail");
-        
-        // Re-enable play button through reset
-        setTimeout(() => {
-            resetGameState();
-        }, 3000);
-    });
+socket.on('balance_update', ({ balance }) => {
+    $('wallet-balance').innerText = balance;
+});
 
-    function resetGameState() {
-        gameId = null;
-        gameActive = false;
-        playBtn.disabled = false;
-        boardWrap.classList.add('hidden');
-        $('lobby-screen').classList.remove('hidden');
-        setStatus('Ready to play', '');
-    }
+socket.on('error_msg', msg => {
+    showToast(msg, 'fail');
+    playBtn.disabled = false;
+    setStatus('Ready to play', '');
+});
 
-    function setStatus(text, className, pulse) {
-        const s = $('status');
-        s.innerText = text;
-        s.className = className;
-    }
+function resetToLobby() {
+    gameId = null;
+    gameActive = false;
+    playBtn.disabled = false;
+    boardWrap.classList.add('hidden');
+    $('lobby-screen').classList.remove('hidden');
+    setStatus('Ready to play', '');
+}
 
-    function showToast(msg, type) {
-        console.log(`[TOAST] ${type}: ${msg}`);
-    }
-</script>
+function setStatus(text, className, pulse = false) {
+    const s = $('status');
+    s.innerText = text;
+    s.className = className + (pulse ? ' pulse' : '');
+}
+
+function showToast(msg, type) {
+    const t = $('toast');
+    if (!t) return alert(msg);
+    t.innerText = msg;
+    t.className = `toast show ${type}`;
+    setTimeout(() => t.className = 'toast', 3000);
+}
