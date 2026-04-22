@@ -21,11 +21,10 @@ if (!process.env.REDIS_URL) {
     console.error('FATAL: REDIS_URL is not set.');
     process.exit(1);
 }
-// Force TLS — Render Redis requires rediss:// even if dashboard shows redis://
-const rawRedisUrl = process.env.REDIS_URL.replace(/^redis:\/\//, 'rediss://');
+// Internal Render Redis — plain redis:// with keepAlive
 const redisOpts = {
-    url: rawRedisUrl,
-    socket: { tls: true, rejectUnauthorized: false, keepAlive: 5000 },
+    url: process.env.REDIS_URL,
+    socket: { keepAlive: 5000, reconnectStrategy: retries => Math.min(retries * 100, 3000) },
 };
 const redis    = createClient(redisOpts);
 const redisPub = createClient(redisOpts);
