@@ -191,6 +191,29 @@
             color: #000;
         }
 
+        .btn-gold {
+            background: var(--gold);
+            color: #000;
+        }
+
+        .forgot-pin-link {
+            text-align: center;
+            margin-top: 12px;
+        }
+
+        .forgot-pin-link a {
+            color: var(--gold);
+            font-size: 0.65rem;
+            letter-spacing: 2px;
+            text-decoration: none;
+            cursor: pointer;
+            text-transform: uppercase;
+        }
+
+        .forgot-pin-link a:hover {
+            text-decoration: underline;
+        }
+
         .wallet-header {
             display: flex;
             justify-content: space-between;
@@ -662,7 +685,7 @@
             border-radius: 20px;
             padding: 28px;
             width: 100%;
-            max-width: 340px;
+            max-width: 380px;
             display: flex;
             flex-direction: column;
             gap: 16px;
@@ -758,6 +781,9 @@
             <br>
             <button class="btn btn-primary" id="submit-pin-btn">Enter Arena</button>
             <button class="btn btn-outline" id="back-btn" style="margin-top: 8px;">← Back</button>
+            <div class="forgot-pin-link">
+                <a id="forgot-pin-link">Forgot PIN?</a>
+            </div>
         </div>
     </div>
     <p style="font-size:0.6rem;color:var(--muted);text-align:center;letter-spacing:1px;">
@@ -928,6 +954,56 @@
     </div>
 </div>
 
+<!-- RESET PIN MODAL -->
+<div class="modal hidden" id="reset-pin-modal">
+    <div class="modal-card">
+        <div class="modal-title" style="color: var(--gold)">Reset PIN</div>
+        
+        <!-- Step 1: Request Code -->
+        <div id="reset-step-1">
+            <div class="modal-note">
+                Enter your phone number to receive a reset code.
+            </div>
+            <div class="input-group">
+                <label>Phone Number</label>
+                <input type="tel" id="reset-phone-input" placeholder="2547XXXXXXXX" maxlength="15">
+            </div>
+            <button class="btn btn-primary" id="request-reset-btn" style="background: var(--gold); color: #000;">Send Reset Code</button>
+        </div>
+        
+        <!-- Step 2: Enter Code -->
+        <div id="reset-step-2" class="hidden">
+            <div class="modal-note" style="color: var(--green);">
+                Code sent to <span id="reset-phone-display"></span>
+            </div>
+            <div class="input-group">
+                <label>6-Digit Code</label>
+                <input type="text" id="reset-code-input" class="pin-input" placeholder="000000" maxlength="6" inputmode="numeric" style="font-size: 1.5rem !important;">
+            </div>
+            <button class="btn btn-primary" id="verify-code-btn" style="background: var(--gold); color: #000;">Verify Code</button>
+            <button class="btn btn-outline" id="back-to-request-btn" style="margin-top: 8px;">← Back</button>
+        </div>
+        
+        <!-- Step 3: Set New PIN -->
+        <div id="reset-step-3" class="hidden">
+            <div class="modal-note" style="color: var(--green);">
+                Code verified! Set your new PIN.
+            </div>
+            <div class="input-group">
+                <label>New 4-Digit PIN</label>
+                <input type="password" id="new-pin-input" class="pin-input" placeholder="****" maxlength="4" inputmode="numeric">
+            </div>
+            <div class="input-group">
+                <label>Confirm New PIN</label>
+                <input type="password" id="confirm-new-pin-input" class="pin-input" placeholder="****" maxlength="4" inputmode="numeric">
+            </div>
+            <button class="btn btn-primary" id="set-new-pin-btn" style="background: var(--gold); color: #000;">Reset PIN</button>
+        </div>
+        
+        <button class="btn btn-outline" id="close-reset-modal">Cancel</button>
+    </div>
+</div>
+
 <!-- RESULT OVERLAY -->
 <div class="overlay hidden" id="result-overlay">
     <div class="overlay-card">
@@ -956,6 +1032,11 @@
         // Login/Register state
         let isRegistering = false;
         let checkedPhone = null;
+        
+        // PIN Reset state
+        let resetToken = null;
+        let verifyToken = null;
+        let resetPhone = null;
         
         // Game history storage
         let gameHistory = [];
@@ -1025,6 +1106,117 @@
             } else {
                 socket.emit('auth', { phone: checkedPhone, pin });
                 showToast('Logging in...', '');
+            }
+        }
+
+        // --- PIN RESET FUNCTIONS ---
+        function showResetModal() {
+            $('reset-pin-modal').classList.remove('hidden');
+            $('reset-step-1').classList.remove('hidden');
+            $('reset-step-2').classList.add('hidden');
+            $('reset-step-3').classList.add('hidden');
+            $('reset-phone-input').value = $('phone-input').value || '';
+            resetToken = null;
+            verifyToken = null;
+        }
+
+        function hideResetModal() {
+            $('reset-pin-modal').classList.add('hidden');
+        }
+
+        async function requestResetCode() {
+            const phone = $('reset-phone-input').value.trim();
+            if (!phone) return showToast('Enter your phone number', 'fail');
+            
+            showToast('Sending reset code...', '');
+            
+            try {
+                const res = await fetch('/api/reset-pin/request', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phone })
+                });
+                
+                const data = await res.json();
+                
+                if (res.ok) {
+                    resetToken = data.token;
+                    resetPhone = phone;
+                    $('reset-phone-display').textContent = phone;
+                    
+                    if (data.demoCode) {
+                        showToast(`Demo code: ${data.demoCode}`, 'success');
+                        $('reset-code-input').value = data.demoCode;
+                    } else {
+                        showToast('Reset code sent to your phone!', 'success');
+                    }
+                    
+                    $('reset-step-1').classList.add('hidden');
+                    $('reset-step-2').classList.remove('hidden');
+                } else {
+                    showToast(data.error || 'Failed to send code', 'fail');
+                }
+            } catch (e) {
+                showToast('Network error. Try again.', 'fail');
+            }
+        }
+
+        async function verifyResetCode() {
+            const code = $('reset-code-input').value.trim();
+            if (!code || code.length !== 6) return showToast('Enter the 6-digit code', 'fail');
+            
+            try {
+                const res = await fetch('/api/reset-pin/verify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token: resetToken, code })
+                });
+                
+                const data = await res.json();
+                
+                if (res.ok) {
+                    verifyToken = data.verifyToken;
+                    $('reset-step-2').classList.add('hidden');
+                    $('reset-step-3').classList.remove('hidden');
+                    showToast('Code verified! Set your new PIN.', 'success');
+                } else {
+                    showToast(data.error || 'Invalid code', 'fail');
+                }
+            } catch (e) {
+                showToast('Network error. Try again.', 'fail');
+            }
+        }
+
+        async function setNewPin() {
+            const newPin = $('new-pin-input').value.trim();
+            const confirmPin = $('confirm-new-pin-input').value.trim();
+            
+            if (!newPin || newPin.length !== 4) return showToast('Enter a 4-digit PIN', 'fail');
+            if (newPin !== confirmPin) return showToast('PINs do not match', 'fail');
+            
+            try {
+                const res = await fetch('/api/reset-pin/set', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        token: resetToken, 
+                        verifyToken: verifyToken, 
+                        newPin 
+                    })
+                });
+                
+                const data = await res.json();
+                
+                if (res.ok) {
+                    showToast('PIN reset successful! Please login.', 'success');
+                    hideResetModal();
+                    $('phone-input').value = resetPhone;
+                    showPhoneStep();
+                } else {
+                    showToast(data.error || 'Failed to reset PIN', 'fail');
+                }
+            } catch (e) {
+                showToast('Network error. Try again.', 'fail');
             }
         }
 
@@ -1222,7 +1414,6 @@
                 showToast('Connection error. Check your internet.', 'fail');
             });
 
-            // Login/Register events
             socket.on('user_check_result', ({ exists, phone }) => {
                 isRegistering = !exists;
                 checkedPhone = phone;
@@ -1263,13 +1454,11 @@
                 setStatus('Ready to play', '');
                 loadHistory();
                 
-                // Reset login form
                 showPhoneStep();
                 $('phone-input').value = '';
                 $('pin-input').value = '';
                 $('confirm-pin-input').value = '';
                 
-                // Auto-join room if there's a pending room code from URL
                 if (pendingRoomJoin) {
                     console.log('🚪 Auto-joining room from URL:', pendingRoomJoin);
                     $('room-code-input').value = pendingRoomJoin;
@@ -1292,7 +1481,6 @@
                 $('searching-count').textContent = searching;
             });
 
-            // Invite system events
             socket.on('room_created', ({ roomCode, balance }) => {
                 currentRoomCode = roomCode;
                 waitingForOpponent = true;
@@ -1684,6 +1872,17 @@
             $('continue-btn').addEventListener('click', checkUserAndProceed);
             $('submit-pin-btn').addEventListener('click', submitPin);
             $('back-btn').addEventListener('click', showPhoneStep);
+            $('forgot-pin-link').addEventListener('click', showResetModal);
+            
+            $('close-reset-modal').addEventListener('click', hideResetModal);
+            $('request-reset-btn').addEventListener('click', requestResetCode);
+            $('verify-code-btn').addEventListener('click', verifyResetCode);
+            $('set-new-pin-btn').addEventListener('click', setNewPin);
+            $('back-to-request-btn').addEventListener('click', () => {
+                $('reset-step-2').classList.add('hidden');
+                $('reset-step-1').classList.remove('hidden');
+            });
+            
             $('logout-btn').addEventListener('click', logout);
             $('play-btn').addEventListener('click', (e) => { e.preventDefault(); findMatch(); });
             $('cancel-btn').addEventListener('click', cancelSearch);
@@ -1730,11 +1929,19 @@
             $('withdraw-amount').addEventListener('keydown', e => { if (e.key === 'Enter') submitWithdraw(); });
             $('room-code-input').addEventListener('keydown', e => { if (e.key === 'Enter') joinPrivateRoom(); });
             
-            // Only allow numbers in PIN fields
             $('pin-input').addEventListener('input', (e) => {
                 e.target.value = e.target.value.replace(/\D/g, '').slice(0, 4);
             });
             $('confirm-pin-input').addEventListener('input', (e) => {
+                e.target.value = e.target.value.replace(/\D/g, '').slice(0, 4);
+            });
+            $('reset-code-input').addEventListener('input', (e) => {
+                e.target.value = e.target.value.replace(/\D/g, '').slice(0, 6);
+            });
+            $('new-pin-input').addEventListener('input', (e) => {
+                e.target.value = e.target.value.replace(/\D/g, '').slice(0, 4);
+            });
+            $('confirm-new-pin-input').addEventListener('input', (e) => {
                 e.target.value = e.target.value.replace(/\D/g, '').slice(0, 4);
             });
             
