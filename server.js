@@ -17,9 +17,22 @@ const io = new Server(server, {
 });
 
 // ─── REDIS CLIENTS ────────────────────────────────────────────────────────
-const redis    = createClient({ url: process.env.REDIS_URL || 'redis://127.0.0.1:6380' });
-const redisPub = createClient({ url: process.env.REDIS_URL || 'redis://127.0.0.1:6380' });
-const redisSub = createClient({ url: process.env.REDIS_URL || 'redis://127.0.0.1:6380' });
+if (!process.env.REDIS_URL) {
+    console.error('FATAL: REDIS_URL environment variable is not set. Check your Render environment settings.');
+    process.exit(1);
+}
+
+const redisOpts = { url: process.env.REDIS_URL };
+const redis    = createClient(redisOpts);
+const redisPub = createClient(redisOpts);
+const redisSub = createClient(redisOpts);
+
+redis.on('error',    e => console.error('Redis error:',    e.message));
+redisPub.on('error', e => console.error('RedisPub error:', e.message));
+redisSub.on('error', e => console.error('RedisSub error:', e.message));
+redis.on('connect',    () => console.log('Redis connected'));
+redisPub.on('connect', () => console.log('RedisPub connected'));
+redisSub.on('connect', () => console.log('RedisSub connected'));
 
 // ─── SECURITY HEADERS ────────────────────────────────────────────────────
 app.use(helmet({
@@ -369,6 +382,7 @@ async function start() {
             if (socket.searching) return; // prevent double click
             socket.searching = true; // lock immediately to prevent race condition
 
+            try {
             const deducted = await deductBalance(socket.phone, ENTRY_FEE);
             if (!deducted) {
                 socket.searching = false;
@@ -430,6 +444,11 @@ async function start() {
                 await redis.rPush('matchmaking_queue', `${socket.phone}::${socket.id}`);
                 socket.emit('waiting', {});
                 await broadcastOnlineCount();
+            }
+            } catch (err) {
+                socket.searching = false;
+                audit('find_match_error', { phone: socket.phone, error: err.message });
+                socket.emit('error_msg', 'Matchmaking error. Please try again.');
             }
         });
 
