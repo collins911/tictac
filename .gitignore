@@ -4,3 +4,13 @@ node_modules
 *.pdb
 *.bat
 bin/
+
+.env
+redis-server*
+redis-cli*
+redis-benchmark*
+redis-check*
+*.pdb
+ngrok*
+start_game*
+bin/
