@@ -94,30 +94,7 @@ app.use(xss());
 app.use(mongoSanitize());
 app.use(hpp());
 
-// ─── SESSION MANAGEMENT ──────────────────────────────────────────────────
-// Initialize session store with Redis
-let sessionStore;
-if (redis.isReady) {
-    sessionStore = new RedisStore({ client: redis });
-    console.log('✅ Redis session store initialized');
-} else {
-    console.warn('⚠️ Redis not ready - falling back to MemoryStore (not for production!)');
-    sessionStore = undefined;
-}
-
-app.use(session({
-    store: sessionStore,
-    secret: SESSION_SECRET,
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-        secure: process.env.NODE_ENV === 'production',
-        httpOnly: true,
-        maxAge: 24 * 60 * 60 * 1000,
-        sameSite: 'strict'
-    },
-    name: 'tictac_sid'
-}));
+// ⚠️ Session middleware is applied after Redis connects — see start() below
 
 app.use(express.static(path.join(__dirname, 'public'), {
     maxAge: '1h',
@@ -1198,6 +1175,25 @@ async function start() {
     } catch(e) {
         console.warn('⚠️ Redis unavailable — using in-memory storage');
     }
+
+    // ─── SESSION MIDDLEWARE ──────────────────────────────
+    // Always pass RedisStore directly -- connect-redis handles readiness.
+    // Never guard with redis.isReady; client is already connected above.
+    const sessionStore = new RedisStore({ client: redis });
+    app.use(session({
+        store: sessionStore,
+        secret: SESSION_SECRET,
+        resave: false,
+        saveUninitialized: false,
+        cookie: {
+            secure: process.env.NODE_ENV === 'production',
+            httpOnly: true,
+            maxAge: 24 * 60 * 60 * 1000,
+            sameSite: 'strict'
+        },
+        name: 'tictac_sid'
+    }));
+
     const PORT = process.env.PORT || 3000;
     server.listen(PORT, () => console.log(`🚀 TicTac Cash running on port ${PORT}`));
 }
