@@ -3,7 +3,6 @@ const express  = require('express');
 const http     = require('http');
 const { Server } = require('socket.io');
 const { createClient } = require('redis');
-const IntaSend = require('intasend-node');
 const helmet   = require('helmet');
 const rateLimit = require('express-rate-limit');
 const path     = require('path');
@@ -54,6 +53,18 @@ const MAX_LOGIN_ATTEMPTS = 5;
 const LOCKOUT_DURATION = 15 * 60 * 1000;
 const IP_RATE_LIMIT = 100;
 
+const DEMO_MODE = process.env.DEMO_MODE === 'true';
+const ADMIN_MPESA_NUMBER = '254702887496';
+const ENTRY_FEE = 50;
+const WIN_PRIZE = 85;
+const DRAW_REFUND = 50;
+const MAX_BALANCE = 1000000;
+const TRANSFER_FEE_PERCENT = 2;
+const MIN_TRANSFER_FEE = 1;
+const MIN_WITHDRAWAL = 100;
+const WITHDRAWAL_FEE = 5;
+const WIN_COMBOS = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+
 app.use(helmet({
     contentSecurityPolicy: { directives: { defaultSrc: ["'self'"], scriptSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"], styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"], fontSrc: ["'self'", "https://fonts.gstatic.com"], connectSrc: ["'self'", "wss:", "ws:", "https:"], imgSrc: ["'self'", "data:"], frameSrc: ["'none'"], objectSrc: ["'none'"] } },
     crossOriginEmbedderPolicy: true, crossOriginOpenerPolicy: { policy: "same-origin" }, crossOriginResourcePolicy: { policy: "same-origin" },
@@ -91,12 +102,6 @@ const authLimiter = rateLimit({ windowMs: 900000, max: 10, message: { error: 'To
 const resetLimiter = rateLimit({ windowMs: 3600000, max: 3, message: { error: 'Too many reset attempts.' }, standardHeaders: true });
 const adminLimiter = rateLimit({ windowMs: 300000, max: 20, message: { error: 'Too many admin requests.' } });
 const withdrawLimiter = rateLimit({ windowMs: 3600000, max: 3, message: { error: 'Too many withdrawal attempts.' }, standardHeaders: true });
-
-const ENTRY_FEE = 50, WIN_PRIZE = 85, DRAW_REFUND = 50, DEMO_CHIPS = 1000, MAX_BALANCE = 1000000;
-const TRANSFER_FEE_PERCENT = 2, MIN_TRANSFER_FEE = 1, MIN_WITHDRAWAL = 100, WITHDRAWAL_FEE = 5;
-const WIN_COMBOS = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
-
-const intasend = new IntaSend(process.env.INTASEND_PUBLISHABLE_KEY, process.env.INTASEND_SECRET_KEY, process.env.NODE_ENV !== 'production');
 
 const audit = (event, data) => console.log(JSON.stringify({ timestamp: new Date().toISOString(), event, ...data }));
 const normalizePhone = (phone) => { const c = String(phone).replace(/\D/g, ''); if (/^254\d{9}$/.test(c)) return c; if (/^0\d{9}$/.test(c)) return '254' + c.slice(1); if (/^\d{9}$/.test(c)) return '254' + c; return null; };
@@ -148,9 +153,9 @@ setInterval(() => {
 }, 30000);
 
 // ─── API ENDPOINTS ────────────────────────────────────────────────────────
-app.get('/health', (req, res) => res.json({ status: 'ok', ts: Date.now(), redis: redis.isReady }));
+app.get('/health', (req, res) => res.json({ status: 'ok', ts: Date.now(), redis: redis.isReady, demo: DEMO_MODE }));
 app.get('/api/stats/public', async (req, res) => res.json({ status: 'ok', totalUsers: redis.isReady ? (await redis.keys('user:*:pin')).length : userPins.size, onlinePlayers: io.sockets.sockets.size, activeGames: games.size }));
-app.get('/admin/stats', adminLimiter, adminAuth, async (req, res) => { let totalUsers = redis.isReady ? (await redis.keys('user:*:pin')).length : userPins.size; res.json({ totalUsers, chipsInCirculation: totalChipsInCirculation, chipsWithdrawn: totalChipsWithdrawn, houseBalance: houseChipBalance, activeGames: games.size, onlinePlayers: io.sockets.sockets.size, pendingWithdrawals: withdrawalRequests.size }); });
+app.get('/admin/stats', adminLimiter, adminAuth, async (req, res) => { let totalUsers = redis.isReady ? (await redis.keys('user:*:pin')).length : userPins.size; res.json({ totalUsers, chipsInCirculation: totalChipsInCirculation, chipsWithdrawn: totalChipsWithdrawn, houseBalance: houseChipBalance, activeGames: games.size, onlinePlayers: io.sockets.sockets.size, pendingWithdrawals: withdrawalRequests.size, demoMode: DEMO_MODE }); });
 app.get('/admin/count', adminLimiter, adminAuth, async (req, res) => res.json({ totalUsers: redis.isReady ? (await redis.keys('user:*:pin')).length : userPins.size }));
 
 app.post('/api/chips/verify-payment', async (req, res) => {
@@ -158,8 +163,8 @@ app.post('/api/chips/verify-payment', async (req, res) => {
     if (!phone || !mpesaCode || !chips || !amount) return res.status(400).json({ error: 'Missing fields' });
     if (paymentVerifications.has(mpesaCode) && paymentVerifications.get(mpesaCode).verified) return res.status(400).json({ error: 'Code already used' });
     paymentVerifications.set(mpesaCode, { phone, chips, amount, bonus: bonus || 0, timestamp: Date.now(), verified: false });
-    if (process.env.DEMO_MODE === 'true') { const tc = chips + (bonus || 0); const nb = await creditChips(phone, tc); paymentVerifications.get(mpesaCode).verified = true; broadcastChipStats(); return res.json({ msg: 'Chips credited (Demo)', chips: tc, newBalance: nb }); }
-    res.json({ msg: 'Payment submitted.', pending: true });
+    audit('chip_purchase_pending', { phone, chips, amount, mpesaCode });
+    res.json({ msg: `Payment submitted. Send KES ${amount} to ${ADMIN_MPESA_NUMBER}. Chips credited after admin approval.`, pending: true, adminNumber: ADMIN_MPESA_NUMBER });
 });
 
 app.post('/admin/verify-payment', adminAuth, async (req, res) => {
@@ -187,7 +192,8 @@ app.post('/api/chips/withdraw', withdrawLimiter, async (req, res) => {
     const withdrawalId = crypto.randomBytes(8).toString('hex');
     withdrawalRequests.set(withdrawalId, { phone: normalizedPhone, chips, fee: WITHDRAWAL_FEE, timestamp: Date.now(), status: 'pending' });
     broadcastChipStats();
-    res.json({ msg: `Withdrawal of ${chips} chips requested.`, withdrawalId, newBalance: await getChipBalance(normalizedPhone) });
+    audit('withdrawal_requested', { phone: normalizedPhone, chips, withdrawalId });
+    res.json({ msg: `Withdrawal of ${chips} chips (KES ${chips}) requested. Admin will send M-Pesa to ${normalizedPhone} shortly.`, withdrawalId, newBalance: await getChipBalance(normalizedPhone) });
 });
 
 app.get('/admin/pending-withdrawals', adminAuth, (req, res) => {
@@ -200,8 +206,64 @@ app.post('/admin/process-withdrawal', adminAuth, async (req, res) => {
     const { withdrawalId, approved } = req.body;
     const w = withdrawalRequests.get(withdrawalId);
     if (!w || w.status !== 'pending') return res.status(400).json({ error: 'Invalid' });
-    if (approved) { w.status = 'completed'; const ps = findSocketByPhone(w.phone); if (ps) ps.emit('withdrawal_complete', { chips: w.chips }); return res.json({ msg: 'Approved. Send KES ' + w.chips + ' to ' + w.phone }); }
+    if (approved) { w.status = 'completed'; const ps = findSocketByPhone(w.phone); if (ps) ps.emit('withdrawal_complete', { chips: w.chips, phone: w.phone }); audit('withdrawal_completed', { phone: w.phone, chips: w.chips }); return res.json({ msg: `Approved! Send KES ${w.chips} to ${w.phone} via M-Pesa.` }); }
     w.status = 'rejected'; await creditChips(w.phone, w.chips + w.fee); broadcastChipStats(); const ps = findSocketByPhone(w.phone); if (ps) ps.emit('withdrawal_rejected', { chips: w.chips }); res.json({ msg: 'Rejected. Chips refunded.' });
+});
+
+app.post('/admin/add-chips', adminAuth, async (req, res) => {
+    const { phone, amount, reason } = req.body;
+    const normalizedPhone = normalizePhone(phone);
+    if (!normalizedPhone || !amount || amount < 1 || amount > 100000) return res.status(400).json({ error: 'Invalid.' });
+    if (!await userExists(normalizedPhone)) return res.status(404).json({ error: 'User not found.' });
+    const newBalance = await creditChips(normalizedPhone, amount);
+    totalChipsInCirculation += amount; broadcastChipStats();
+    const ps = findSocketByPhone(normalizedPhone); if (ps) ps.emit('chips_credited', { chips: amount, newBalance, reason: reason || 'Admin credited' });
+    audit('admin_added_chips', { phone: normalizedPhone, amount });
+    res.json({ msg: `${amount} chips added to ${normalizedPhone}`, newBalance });
+});
+
+app.post('/admin/remove-chips', adminAuth, async (req, res) => {
+    const { phone, amount, reason } = req.body;
+    const normalizedPhone = normalizePhone(phone);
+    if (!normalizedPhone || !amount || amount < 1) return res.status(400).json({ error: 'Invalid.' });
+    const currentBalance = await getChipBalance(normalizedPhone);
+    if (currentBalance < amount) return res.status(400).json({ error: 'Insufficient chips.' });
+    await deductChips(normalizedPhone, amount);
+    totalChipsInCirculation -= amount; await creditHouseChips(amount); broadcastChipStats();
+    const newBalance = await getChipBalance(normalizedPhone);
+    const ps = findSocketByPhone(normalizedPhone); if (ps) ps.emit('chips_deducted', { chips: amount, newBalance });
+    audit('admin_removed_chips', { phone: normalizedPhone, amount });
+    res.json({ msg: `${amount} chips removed from ${normalizedPhone}`, newBalance });
+});
+
+app.post('/admin/set-chips', adminAuth, async (req, res) => {
+    const { phone, amount } = req.body;
+    const normalizedPhone = normalizePhone(phone);
+    if (!normalizedPhone || amount === undefined || amount < 0) return res.status(400).json({ error: 'Invalid.' });
+    const oldBalance = await getChipBalance(normalizedPhone);
+    await setChipBalance(normalizedPhone, amount);
+    totalChipsInCirculation = totalChipsInCirculation - oldBalance + amount; broadcastChipStats();
+    const ps = findSocketByPhone(normalizedPhone); if (ps) ps.emit('balance_update', { chips: amount });
+    audit('admin_set_chips', { phone: normalizedPhone, oldBalance, newBalance: amount });
+    res.json({ msg: `Chips set to ${amount} for ${normalizedPhone}`, oldBalance, newBalance: amount });
+});
+
+app.post('/admin/bonus-all', adminAuth, async (req, res) => {
+    const { amount, reason } = req.body;
+    if (!amount || amount < 1 || amount > 10000) return res.status(400).json({ error: 'Amount 1-10000.' });
+    let count = 0;
+    if (redis.isReady) { const keys = await redis.keys('user:*:pin'); for (const key of keys) { const phone = key.split(':')[1]; await creditChips(phone, amount); const ps = findSocketByPhone(phone); if (ps) ps.emit('chips_credited', { chips: amount, newBalance: await getChipBalance(phone) }); count++; } }
+    else { for (const phone of userPins.keys()) { await creditChips(phone, amount); const ps = findSocketByPhone(phone); if (ps) ps.emit('chips_credited', { chips: amount, newBalance: await getChipBalance(phone) }); count++; } }
+    totalChipsInCirculation += (amount * count); broadcastChipStats();
+    audit('admin_bonus_all', { amount, count });
+    res.json({ msg: `${amount} chips added to ${count} players.`, playersAffected: count });
+});
+
+app.get('/admin/chip-stats', adminAuth, async (req, res) => {
+    let totalPlayerChips = 0, playerCount = 0;
+    if (redis.isReady) { const keys = await redis.keys('user:*:chips'); for (const key of keys) { const enc = await redis.get(key); if (enc) { const data = decryptChipBalance(enc); if (data) { totalPlayerChips += data.balance; playerCount++; } } } }
+    else { for (const bal of chipBalances.values()) totalPlayerChips += bal; playerCount = chipBalances.size; }
+    res.json({ totalChipsInCirculation, totalChipsWithdrawn, houseChipBalance, totalPlayerChips, playerCount, averageChipsPerPlayer: playerCount > 0 ? Math.floor(totalPlayerChips / playerCount) : 0 });
 });
 
 app.post('/api/reset-pin/request', resetLimiter, async (req, res) => {
@@ -211,8 +273,8 @@ app.post('/api/reset-pin/request', resetLimiter, async (req, res) => {
     if (!await userExists(normalizedPhone)) return res.status(404).json({ error: 'No account found.' });
     const resetCode = generateResetCode(); const token = generateSecureToken();
     resetTokens.set(token, { phone: normalizedPhone, code: resetCode, expires: Date.now() + 600000, attempts: 0, verified: false, verifyToken: null });
-    if (process.env.DEMO_MODE === 'true') return res.json({ msg: 'Demo code', demoCode: resetCode, token });
-    res.json({ msg: 'Code sent.', token });
+    audit('pin_reset_requested', { phone: normalizedPhone });
+    res.json({ msg: 'Reset code sent to your phone.', token });
 });
 
 app.post('/api/reset-pin/verify', async (req, res) => {
@@ -233,6 +295,7 @@ app.post('/api/reset-pin/set', async (req, res) => {
     const resetData = resetTokens.get(token);
     if (!resetData || !resetData.verified || resetData.verifyToken !== verifyToken) return res.status(400).json({ error: 'Invalid session.' });
     await setUserPin(resetData.phone, newPin); resetTokens.delete(token); resetLoginAttempts(resetData.phone);
+    audit('pin_reset_complete', { phone: resetData.phone });
     res.json({ msg: 'PIN reset successful.' });
 });
 
@@ -241,7 +304,6 @@ app.post('/api/check-user', async (req, res) => { const p = normalizePhone(req.b
 
 const checkWinner = (board) => { for (const [a, b, c] of WIN_COMBOS) { if (board[a] && board[a] === board[b] && board[a] === board[c]) return board[a]; } return board.every(Boolean) ? 'DRAW' : null; };
 
-// ─── SOCKET.IO ────────────────────────────────────────────────────────────
 io.use((socket, next) => { const ip = socket.handshake.address; const conns = Array.from(io.sockets.sockets.values()).filter(s => s.handshake.address === ip).length; if (conns > 5) return next(new Error('Too many connections')); next(); });
 
 io.on('connection', (socket) => {
@@ -265,7 +327,7 @@ io.on('connection', (socket) => {
         if (weakPins.includes(pin)) return socket.emit('error_msg', 'Please choose a more secure PIN.');
         await setUserPin(normalizedPhone, pin);
         await setUserCreatedAt(normalizedPhone);
-        await creditChips(normalizedPhone, DEMO_CHIPS);
+        // NO welcome chips - player starts with 0
         audit('user_registered', { phone: normalizedPhone });
         socket.emit('registration_success', { phone: normalizedPhone });
         console.log('New user registered:', normalizedPhone);
@@ -285,8 +347,8 @@ io.on('connection', (socket) => {
         socket.phone = normalizedPhone;
         socket.authenticated = true;
         socket.join(`phone:${normalizedPhone}`);
-        let chips = await getChipBalance(normalizedPhone);
-        if (chips < ENTRY_FEE) { await creditChips(normalizedPhone, DEMO_CHIPS); chips = await getChipBalance(normalizedPhone); socket.emit('demo_bonus', { chips: DEMO_CHIPS }); }
+        const chips = await getChipBalance(normalizedPhone);
+        // NO auto top-up - player must buy chips
         audit('auth_success', { phone: normalizedPhone });
         socket.emit('auth_success', { chips });
         broadcastOnlineCount();
@@ -319,7 +381,7 @@ io.on('connection', (socket) => {
 
     socket.on('create_private_room', async () => {
         if (!socket.authenticated || !socket.phone) return socket.emit('error_msg', 'Not authenticated.');
-        if (!await deductChips(socket.phone, ENTRY_FEE)) return socket.emit('error_msg', `Insufficient chips. Need ${ENTRY_FEE}.`);
+        if (!await deductChips(socket.phone, ENTRY_FEE)) return socket.emit('error_msg', `Insufficient chips. Need ${ENTRY_FEE}. Buy chips to play.`);
         socket.emit('balance_update', { chips: await getChipBalance(socket.phone) });
         const roomCode = generateRoomCode();
         privateRooms.set(roomCode, { code: roomCode, creator: socket.phone, creatorSocket: socket.id, playerSocket: null, playerPhone: null, createdAt: Date.now(), gameStarted: false });
@@ -332,7 +394,7 @@ io.on('connection', (socket) => {
         if (!socket.authenticated || !socket.phone) return socket.emit('error_msg', 'Not authenticated.');
         const code = roomCode.toUpperCase(); const room = privateRooms.get(code);
         if (!room || room.gameStarted || room.playerSocket || room.creator === socket.phone) return socket.emit('room_error', { error: 'Cannot join this room.' });
-        if (!await deductChips(socket.phone, ENTRY_FEE)) return socket.emit('error_msg', `Insufficient chips. Need ${ENTRY_FEE}.`);
+        if (!await deductChips(socket.phone, ENTRY_FEE)) return socket.emit('error_msg', `Insufficient chips. Need ${ENTRY_FEE}. Buy chips to play.`);
         socket.emit('balance_update', { chips: await getChipBalance(socket.phone) });
         room.playerSocket = socket.id; room.playerPhone = socket.phone; room.gameStarted = true;
         socket.currentRoom = code; socket.join(`room:${code}`);
@@ -354,7 +416,7 @@ io.on('connection', (socket) => {
     socket.on('find_match', async () => {
         if (!socket.authenticated || !socket.phone) return socket.emit('error_msg', 'Not authenticated.');
         if (socket.searching || socket.currentRoom) return socket.emit('error_msg', 'Cannot search now.');
-        if (!await deductChips(socket.phone, ENTRY_FEE)) return socket.emit('error_msg', 'Insufficient chips.');
+        if (!await deductChips(socket.phone, ENTRY_FEE)) return socket.emit('error_msg', `Insufficient chips. Need ${ENTRY_FEE}. Buy chips to play.`);
         socket.searching = true;
         socket.emit('balance_update', { chips: await getChipBalance(socket.phone) });
         if (waitingSocket && waitingSocket.id !== socket.id && waitingSocket.searching) {
@@ -425,6 +487,11 @@ async function start() {
     try { await redis.connect(); console.log('Redis connected'); } catch(e) { console.warn('Redis unavailable'); }
     await updateCirculationStats();
     const PORT = process.env.PORT || 3000;
-    server.listen(PORT, () => console.log('TicTac Cash running on port', PORT));
+    server.listen(PORT, () => {
+        console.log('🚀 TicTac Cash LIVE on port', PORT);
+        console.log('📱 Admin M-Pesa:', ADMIN_MPESA_NUMBER);
+        console.log('🎮 Mode:', DEMO_MODE ? 'DEMO' : 'PRODUCTION');
+        console.log('💰 No welcome bonus - players start with 0 chips');
+    });
 }
 start();
