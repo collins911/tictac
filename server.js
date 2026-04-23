@@ -45,7 +45,8 @@ let totalChipsInCirculation = 0;
 let totalChipsWithdrawn = 0;
 let houseChipBalance = 0;
 
-const ADMIN_SECRET = process.env.ADMIN_SECRET || crypto.randomBytes(32).toString('hex');
+// Use environment variable or fallback
+const ADMIN_SECRET = process.env.ADMIN_SECRET || '1c8e966eea9bed02cee5e4e7f2b915a6';
 const SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex');
 const CHIP_ENCRYPTION_KEY = process.env.CHIP_ENCRYPTION_KEY || crypto.randomBytes(32).toString('hex');
 const CHIP_HMAC_KEY = process.env.CHIP_HMAC_KEY || crypto.randomBytes(32).toString('hex');
@@ -63,6 +64,12 @@ const TRANSFER_FEE_PERCENT = 2;
 const MIN_TRANSFER_FEE = 1;
 const MIN_WITHDRAWAL = 100;
 const WITHDRAWAL_FEE = 5;
+// Chip packages - only 50, 100, 200 KES
+const CHIP_PACKAGES = [
+    { chips: 50, price: 50, bonus: 0, label: '50 Chips - KES 50' },
+    { chips: 100, price: 100, bonus: 0, label: '100 Chips - KES 100' },
+    { chips: 200, price: 200, bonus: 0, label: '200 Chips - KES 200' }
+];
 const WIN_COMBOS = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
 
 app.use(helmet({
@@ -85,7 +92,7 @@ app.use((req, res, next) => {
 });
 
 app.use(express.static(path.join(__dirname, 'public'), { maxAge: '1h', etag: true, lastModified: true }));
-redis.on('ready', () => console.log('Redis ready'));
+redis.on('ready', () => console.log('Redis ready - Admin Secret:', ADMIN_SECRET.slice(0,8)+'...'));
 
 const ipRateLimiter = (req, res, next) => {
     const ip = req.ip || req.connection.remoteAddress;
@@ -113,7 +120,12 @@ const findSocketByPhone = (phone) => { for (const [id, sock] of io.sockets.socke
 const checkLoginAttempts = (phone) => { const r = failedLogins.get(phone); if (!r) return { allowed: true }; if (r.lockedUntil && r.lockedUntil > Date.now()) return { allowed: false, reason: `Account locked. Try again in ${Math.ceil((r.lockedUntil - Date.now()) / 60000)} minutes.` }; if (r.count >= MAX_LOGIN_ATTEMPTS) { r.lockedUntil = Date.now() + LOCKOUT_DURATION; failedLogins.set(phone, r); return { allowed: false, reason: 'Account locked for 15 minutes.' }; } return { allowed: true }; };
 const recordFailedLogin = (phone) => { let r = failedLogins.get(phone) || { count: 0, lockedUntil: null }; r.count++; failedLogins.set(phone, r); };
 const resetLoginAttempts = (phone) => { failedLogins.delete(phone); };
-const adminAuth = (req, res, next) => { const s = req.headers['x-admin-secret'] || req.query.secret; if (!s || s !== ADMIN_SECRET) return res.status(401).json({ error: 'Unauthorized' }); next(); };
+const adminAuth = (req, res, next) => { 
+    const s = req.headers['x-admin-secret'] || req.query.secret;
+    console.log('Admin auth attempt - Provided:', s?.slice(0,8)+'...', 'Expected:', ADMIN_SECRET.slice(0,8)+'...');
+    if (!s || s !== ADMIN_SECRET) return res.status(401).json({ error: 'Unauthorized. Invalid admin secret.' });
+    next(); 
+};
 
 const encryptChipBalance = (phone, balance) => { const iv = crypto.randomBytes(16); const cipher = crypto.createCipheriv('aes-256-gcm', Buffer.from(CHIP_ENCRYPTION_KEY, 'hex').slice(0, 32), iv); const data = JSON.stringify({ phone, balance, timestamp: Date.now() }); let encrypted = cipher.update(data, 'utf8', 'hex'); encrypted += cipher.final('hex'); return iv.toString('hex') + ':' + cipher.getAuthTag().toString('hex') + ':' + encrypted; };
 const decryptChipBalance = (enc) => { try { const p = enc.split(':'); if (p.length !== 3) return null; const d = crypto.createDecipheriv('aes-256-gcm', Buffer.from(CHIP_ENCRYPTION_KEY, 'hex').slice(0, 32), Buffer.from(p[0], 'hex')); d.setAuthTag(Buffer.from(p[1], 'hex')); let dec = d.update(p[2], 'hex', 'utf8'); dec += d.final('utf8'); return JSON.parse(dec); } catch(e) { return null; } };
@@ -135,13 +147,6 @@ const setUserCreatedAt = async (phone) => { const ts = Date.now(); userCreatedAt
 const broadcastOnlineCount = () => io.emit('online_count', { online: io.sockets.sockets.size, searching: waitingSocket ? 1 : 0 });
 const broadcastChipStats = () => io.emit('chip_stats', { inCirculation: totalChipsInCirculation, withdrawn: totalChipsWithdrawn, houseBalance: houseChipBalance });
 
-const updateCirculationStats = async () => {
-    let total = houseChipBalance;
-    if (redis.isReady) { const keys = await redis.keys('user:*:chips'); for (const key of keys) { const enc = await redis.get(key); if (enc) { const data = decryptChipBalance(enc); if (data) total += data.balance; } } }
-    else { for (const bal of chipBalances.values()) total += bal; }
-    totalChipsInCirculation = total; broadcastChipStats();
-};
-
 setInterval(() => {
     const now = Date.now();
     if (waitingSocket) { if (!io.sockets.sockets.has(waitingSocket.id) || !waitingSocket.searching) { waitingSocket = null; broadcastOnlineCount(); } }
@@ -149,14 +154,19 @@ setInterval(() => {
     for (const [key, value] of resetTokens.entries()) { if (value.expires < now) resetTokens.delete(key); }
     for (const [phone, record] of failedLogins.entries()) { if (record.lockedUntil && record.lockedUntil < now) failedLogins.delete(phone); }
     for (const [ip, record] of ipRequests.entries()) { if (now - record.windowStart > 60000) ipRequests.delete(ip); }
-    updateCirculationStats();
 }, 30000);
 
-// ─── API ENDPOINTS ────────────────────────────────────────────────────────
 app.get('/health', (req, res) => res.json({ status: 'ok', ts: Date.now(), redis: redis.isReady, demo: DEMO_MODE }));
-app.get('/api/stats/public', async (req, res) => res.json({ status: 'ok', totalUsers: redis.isReady ? (await redis.keys('user:*:pin')).length : userPins.size, onlinePlayers: io.sockets.sockets.size, activeGames: games.size }));
-app.get('/admin/stats', adminLimiter, adminAuth, async (req, res) => { let totalUsers = redis.isReady ? (await redis.keys('user:*:pin')).length : userPins.size; res.json({ totalUsers, chipsInCirculation: totalChipsInCirculation, chipsWithdrawn: totalChipsWithdrawn, houseBalance: houseChipBalance, activeGames: games.size, onlinePlayers: io.sockets.sockets.size, pendingWithdrawals: withdrawalRequests.size, demoMode: DEMO_MODE }); });
-app.get('/admin/count', adminLimiter, adminAuth, async (req, res) => res.json({ totalUsers: redis.isReady ? (await redis.keys('user:*:pin')).length : userPins.size }));
+
+// ─── ADMIN ENDPOINTS ──────────────────────────────────────────────────────
+app.get('/admin/stats', adminLimiter, adminAuth, async (req, res) => {
+    let totalUsers = redis.isReady ? (await redis.keys('user:*:pin')).length : userPins.size;
+    res.json({ totalUsers, chipsInCirculation: totalChipsInCirculation, chipsWithdrawn: totalChipsWithdrawn, houseBalance: houseChipBalance, activeGames: games.size, onlinePlayers: io.sockets.sockets.size, pendingWithdrawals: withdrawalRequests.size, demoMode: DEMO_MODE });
+});
+
+app.get('/admin/count', adminLimiter, adminAuth, async (req, res) => {
+    res.json({ totalUsers: redis.isReady ? (await redis.keys('user:*:pin')).length : userPins.size });
+});
 
 app.post('/api/chips/verify-payment', async (req, res) => {
     const { phone, mpesaCode, chips, amount, bonus } = req.body;
@@ -164,7 +174,7 @@ app.post('/api/chips/verify-payment', async (req, res) => {
     if (paymentVerifications.has(mpesaCode) && paymentVerifications.get(mpesaCode).verified) return res.status(400).json({ error: 'Code already used' });
     paymentVerifications.set(mpesaCode, { phone, chips, amount, bonus: bonus || 0, timestamp: Date.now(), verified: false });
     audit('chip_purchase_pending', { phone, chips, amount, mpesaCode });
-    res.json({ msg: `Payment submitted. Send KES ${amount} to ${ADMIN_MPESA_NUMBER}. Chips credited after admin approval.`, pending: true, adminNumber: ADMIN_MPESA_NUMBER });
+    res.json({ msg: `Payment submitted. Send KES ${amount} to ${ADMIN_MPESA_NUMBER}. Chips credited after admin approval.`, pending: true });
 });
 
 app.post('/admin/verify-payment', adminAuth, async (req, res) => {
@@ -175,7 +185,10 @@ app.post('/admin/verify-payment', adminAuth, async (req, res) => {
     paymentVerifications.delete(mpesaCode); res.json({ msg: 'Rejected' });
 });
 
-app.get('/admin/pending-payments', adminAuth, (req, res) => { const p = []; for (const [code, data] of paymentVerifications.entries()) { if (!data.verified) p.push({ mpesaCode: code, phone: data.phone, chips: data.chips, amount: data.amount, timestamp: new Date(data.timestamp).toISOString() }); } res.json({ pending: p }); });
+app.get('/admin/pending-payments', adminAuth, (req, res) => {
+    const p = []; for (const [code, data] of paymentVerifications.entries()) { if (!data.verified) p.push({ mpesaCode: code, phone: data.phone, chips: data.chips, amount: data.amount, timestamp: new Date(data.timestamp).toISOString() }); }
+    res.json({ pending: p });
+});
 
 app.post('/api/chips/withdraw', withdrawLimiter, async (req, res) => {
     const { phone, chips, pin } = req.body;
@@ -192,8 +205,7 @@ app.post('/api/chips/withdraw', withdrawLimiter, async (req, res) => {
     const withdrawalId = crypto.randomBytes(8).toString('hex');
     withdrawalRequests.set(withdrawalId, { phone: normalizedPhone, chips, fee: WITHDRAWAL_FEE, timestamp: Date.now(), status: 'pending' });
     broadcastChipStats();
-    audit('withdrawal_requested', { phone: normalizedPhone, chips, withdrawalId });
-    res.json({ msg: `Withdrawal of ${chips} chips (KES ${chips}) requested. Admin will send M-Pesa to ${normalizedPhone} shortly.`, withdrawalId, newBalance: await getChipBalance(normalizedPhone) });
+    res.json({ msg: `Withdrawal of ${chips} chips (KES ${chips}) requested.`, withdrawalId, newBalance: await getChipBalance(normalizedPhone) });
 });
 
 app.get('/admin/pending-withdrawals', adminAuth, (req, res) => {
@@ -206,57 +218,38 @@ app.post('/admin/process-withdrawal', adminAuth, async (req, res) => {
     const { withdrawalId, approved } = req.body;
     const w = withdrawalRequests.get(withdrawalId);
     if (!w || w.status !== 'pending') return res.status(400).json({ error: 'Invalid' });
-    if (approved) { w.status = 'completed'; const ps = findSocketByPhone(w.phone); if (ps) ps.emit('withdrawal_complete', { chips: w.chips, phone: w.phone }); audit('withdrawal_completed', { phone: w.phone, chips: w.chips }); return res.json({ msg: `Approved! Send KES ${w.chips} to ${w.phone} via M-Pesa.` }); }
+    if (approved) { w.status = 'completed'; const ps = findSocketByPhone(w.phone); if (ps) ps.emit('withdrawal_complete', { chips: w.chips }); return res.json({ msg: `Send KES ${w.chips} to ${w.phone}` }); }
     w.status = 'rejected'; await creditChips(w.phone, w.chips + w.fee); broadcastChipStats(); const ps = findSocketByPhone(w.phone); if (ps) ps.emit('withdrawal_rejected', { chips: w.chips }); res.json({ msg: 'Rejected. Chips refunded.' });
 });
 
 app.post('/admin/add-chips', adminAuth, async (req, res) => {
-    const { phone, amount, reason } = req.body;
+    const { phone, amount } = req.body;
     const normalizedPhone = normalizePhone(phone);
-    if (!normalizedPhone || !amount || amount < 1 || amount > 100000) return res.status(400).json({ error: 'Invalid.' });
-    if (!await userExists(normalizedPhone)) return res.status(404).json({ error: 'User not found.' });
+    if (!normalizedPhone || !amount || amount < 1) return res.status(400).json({ error: 'Invalid.' });
     const newBalance = await creditChips(normalizedPhone, amount);
-    totalChipsInCirculation += amount; broadcastChipStats();
-    const ps = findSocketByPhone(normalizedPhone); if (ps) ps.emit('chips_credited', { chips: amount, newBalance, reason: reason || 'Admin credited' });
-    audit('admin_added_chips', { phone: normalizedPhone, amount });
+    broadcastChipStats();
     res.json({ msg: `${amount} chips added to ${normalizedPhone}`, newBalance });
 });
 
 app.post('/admin/remove-chips', adminAuth, async (req, res) => {
-    const { phone, amount, reason } = req.body;
+    const { phone, amount } = req.body;
     const normalizedPhone = normalizePhone(phone);
     if (!normalizedPhone || !amount || amount < 1) return res.status(400).json({ error: 'Invalid.' });
     const currentBalance = await getChipBalance(normalizedPhone);
     if (currentBalance < amount) return res.status(400).json({ error: 'Insufficient chips.' });
     await deductChips(normalizedPhone, amount);
-    totalChipsInCirculation -= amount; await creditHouseChips(amount); broadcastChipStats();
-    const newBalance = await getChipBalance(normalizedPhone);
-    const ps = findSocketByPhone(normalizedPhone); if (ps) ps.emit('chips_deducted', { chips: amount, newBalance });
-    audit('admin_removed_chips', { phone: normalizedPhone, amount });
-    res.json({ msg: `${amount} chips removed from ${normalizedPhone}`, newBalance });
-});
-
-app.post('/admin/set-chips', adminAuth, async (req, res) => {
-    const { phone, amount } = req.body;
-    const normalizedPhone = normalizePhone(phone);
-    if (!normalizedPhone || amount === undefined || amount < 0) return res.status(400).json({ error: 'Invalid.' });
-    const oldBalance = await getChipBalance(normalizedPhone);
-    await setChipBalance(normalizedPhone, amount);
-    totalChipsInCirculation = totalChipsInCirculation - oldBalance + amount; broadcastChipStats();
-    const ps = findSocketByPhone(normalizedPhone); if (ps) ps.emit('balance_update', { chips: amount });
-    audit('admin_set_chips', { phone: normalizedPhone, oldBalance, newBalance: amount });
-    res.json({ msg: `Chips set to ${amount} for ${normalizedPhone}`, oldBalance, newBalance: amount });
+    await creditHouseChips(amount); broadcastChipStats();
+    res.json({ msg: `${amount} chips removed from ${normalizedPhone}`, newBalance: await getChipBalance(normalizedPhone) });
 });
 
 app.post('/admin/bonus-all', adminAuth, async (req, res) => {
-    const { amount, reason } = req.body;
-    if (!amount || amount < 1 || amount > 10000) return res.status(400).json({ error: 'Amount 1-10000.' });
+    const { amount } = req.body;
+    if (!amount || amount < 1) return res.status(400).json({ error: 'Invalid amount.' });
     let count = 0;
-    if (redis.isReady) { const keys = await redis.keys('user:*:pin'); for (const key of keys) { const phone = key.split(':')[1]; await creditChips(phone, amount); const ps = findSocketByPhone(phone); if (ps) ps.emit('chips_credited', { chips: amount, newBalance: await getChipBalance(phone) }); count++; } }
-    else { for (const phone of userPins.keys()) { await creditChips(phone, amount); const ps = findSocketByPhone(phone); if (ps) ps.emit('chips_credited', { chips: amount, newBalance: await getChipBalance(phone) }); count++; } }
-    totalChipsInCirculation += (amount * count); broadcastChipStats();
-    audit('admin_bonus_all', { amount, count });
-    res.json({ msg: `${amount} chips added to ${count} players.`, playersAffected: count });
+    if (redis.isReady) { const keys = await redis.keys('user:*:pin'); for (const key of keys) { await creditChips(key.split(':')[1], amount); count++; } }
+    else { for (const phone of userPins.keys()) { await creditChips(phone, amount); count++; } }
+    broadcastChipStats();
+    res.json({ msg: `${amount} chips added to ${count} players.` });
 });
 
 app.get('/admin/chip-stats', adminAuth, async (req, res) => {
@@ -273,7 +266,6 @@ app.post('/api/reset-pin/request', resetLimiter, async (req, res) => {
     if (!await userExists(normalizedPhone)) return res.status(404).json({ error: 'No account found.' });
     const resetCode = generateResetCode(); const token = generateSecureToken();
     resetTokens.set(token, { phone: normalizedPhone, code: resetCode, expires: Date.now() + 600000, attempts: 0, verified: false, verifyToken: null });
-    audit('pin_reset_requested', { phone: normalizedPhone });
     res.json({ msg: 'Reset code sent to your phone.', token });
 });
 
@@ -290,175 +282,99 @@ app.post('/api/reset-pin/verify', async (req, res) => {
 
 app.post('/api/reset-pin/set', async (req, res) => {
     const { token, verifyToken, newPin } = req.body;
-    if (!token || !verifyToken || !newPin) return res.status(400).json({ error: 'Missing fields.' });
-    if (!validatePin(newPin)) return res.status(400).json({ error: 'PIN must be 4 digits.' });
+    if (!token || !verifyToken || !newPin || !validatePin(newPin)) return res.status(400).json({ error: 'Invalid.' });
     const resetData = resetTokens.get(token);
     if (!resetData || !resetData.verified || resetData.verifyToken !== verifyToken) return res.status(400).json({ error: 'Invalid session.' });
     await setUserPin(resetData.phone, newPin); resetTokens.delete(token); resetLoginAttempts(resetData.phone);
-    audit('pin_reset_complete', { phone: resetData.phone });
     res.json({ msg: 'PIN reset successful.' });
 });
 
-app.get('/api/room/:code', (req, res) => { const room = privateRooms.get((req.params.code || '').toUpperCase()); res.json(room ? { exists: true, playerJoined: !!room.playerSocket } : { exists: false }); });
+app.get('/api/room/:code', (req, res) => { const room = privateRooms.get((req.params.code || '').toUpperCase()); res.json(room ? { exists: true } : { exists: false }); });
 app.post('/api/check-user', async (req, res) => { const p = normalizePhone(req.body.phone); if (!p) return res.status(400).json({ error: 'Invalid phone.' }); res.json({ exists: await userExists(p) }); });
 
 const checkWinner = (board) => { for (const [a, b, c] of WIN_COMBOS) { if (board[a] && board[a] === board[b] && board[a] === board[c]) return board[a]; } return board.every(Boolean) ? 'DRAW' : null; };
 
-io.use((socket, next) => { const ip = socket.handshake.address; const conns = Array.from(io.sockets.sockets.values()).filter(s => s.handshake.address === ip).length; if (conns > 5) return next(new Error('Too many connections')); next(); });
+io.use((socket, next) => { const ip = socket.handshake.address; if (Array.from(io.sockets.sockets.values()).filter(s => s.handshake.address === ip).length > 5) return next(new Error('Too many connections')); next(); });
 
 io.on('connection', (socket) => {
-    socket.searching = false; socket.currentRoom = null; socket.authenticated = false; socket.ip = socket.handshake.address;
-    console.log('New connection:', socket.id);
+    socket.searching = false; socket.currentRoom = null; socket.authenticated = false;
     broadcastOnlineCount(); broadcastChipStats();
 
     socket.on('check_user', async ({ phone }) => {
-        const normalizedPhone = normalizePhone(phone);
-        if (!normalizedPhone) return socket.emit('error_msg', 'Invalid phone number.');
-        const exists = await userExists(normalizedPhone);
-        socket.emit('user_check_result', { exists, phone: normalizedPhone });
+        const p = normalizePhone(phone);
+        if (!p) return socket.emit('error_msg', 'Invalid phone.');
+        socket.emit('user_check_result', { exists: await userExists(p), phone: p });
     });
 
     socket.on('register', async ({ phone, pin }) => {
-        const normalizedPhone = normalizePhone(phone);
-        if (!normalizedPhone) return socket.emit('error_msg', 'Invalid phone number.');
-        if (!validatePin(pin)) return socket.emit('error_msg', 'PIN must be 4 digits.');
-        if (await userExists(normalizedPhone)) return socket.emit('error_msg', 'User already exists. Please login.');
-        const weakPins = ['0000', '1111', '2222', '3333', '4444', '5555', '6666', '7777', '8888', '9999', '1234'];
-        if (weakPins.includes(pin)) return socket.emit('error_msg', 'Please choose a more secure PIN.');
-        await setUserPin(normalizedPhone, pin);
-        await setUserCreatedAt(normalizedPhone);
-        // NO welcome chips - player starts with 0
-        audit('user_registered', { phone: normalizedPhone });
-        socket.emit('registration_success', { phone: normalizedPhone });
-        console.log('New user registered:', normalizedPhone);
+        const p = normalizePhone(phone);
+        if (!p || !validatePin(pin)) return socket.emit('error_msg', 'Invalid phone or PIN.');
+        if (await userExists(p)) return socket.emit('error_msg', 'User exists. Please login.');
+        if (['0000','1111','2222','3333','4444','5555','6666','7777','8888','9999','1234'].includes(pin)) return socket.emit('error_msg', 'Choose a more secure PIN.');
+        await setUserPin(p, pin); await setUserCreatedAt(p);
+        audit('user_registered', { phone: p });
+        socket.emit('registration_success', { phone: p });
     });
 
     socket.on('auth', async ({ phone, pin }) => {
-        const normalizedPhone = normalizePhone(phone);
-        if (!normalizedPhone) return socket.emit('error_msg', 'Invalid phone number.');
-        if (!validatePin(pin)) return socket.emit('error_msg', 'PIN must be 4 digits.');
-        const attemptCheck = checkLoginAttempts(normalizedPhone);
-        if (!attemptCheck.allowed) return socket.emit('error_msg', attemptCheck.reason);
-        const storedPin = await getUserPin(normalizedPhone);
-        if (!storedPin) return socket.emit('error_msg', 'User not found. Please register first.');
-        const pinValid = await verifyPin(pin, storedPin);
-        if (!pinValid) { recordFailedLogin(normalizedPhone); audit('auth_failed', { phone: normalizedPhone }); return socket.emit('error_msg', 'Invalid PIN.'); }
-        resetLoginAttempts(normalizedPhone);
-        socket.phone = normalizedPhone;
-        socket.authenticated = true;
-        socket.join(`phone:${normalizedPhone}`);
-        const chips = await getChipBalance(normalizedPhone);
-        // NO auto top-up - player must buy chips
-        audit('auth_success', { phone: normalizedPhone });
+        const p = normalizePhone(phone);
+        if (!p || !validatePin(pin)) return socket.emit('error_msg', 'Invalid phone or PIN.');
+        const ac = checkLoginAttempts(p);
+        if (!ac.allowed) return socket.emit('error_msg', ac.reason);
+        const stored = await getUserPin(p);
+        if (!stored) return socket.emit('error_msg', 'User not found. Register first.');
+        if (!await verifyPin(pin, stored)) { recordFailedLogin(p); return socket.emit('error_msg', 'Invalid PIN.'); }
+        resetLoginAttempts(p);
+        socket.phone = p; socket.authenticated = true; socket.join(`phone:${p}`);
+        const chips = await getChipBalance(p);
         socket.emit('auth_success', { chips });
         broadcastOnlineCount();
-        console.log('Auth success:', normalizedPhone, 'Chips:', chips);
-    });
-
-    socket.on('transfer_chips', async ({ recipientPhone, amount, pin }) => {
-        if (!socket.authenticated || !socket.phone) return socket.emit('error_msg', 'Not authenticated.');
-        const storedPin = await getUserPin(socket.phone);
-        if (!storedPin || !await verifyPin(pin, storedPin)) return socket.emit('error_msg', 'Invalid PIN.');
-        if (amount < 10 || amount > 10000) return socket.emit('error_msg', 'Min 10, max 10000 chips.');
-        const fee = Math.max(Math.floor(amount * TRANSFER_FEE_PERCENT / 100), MIN_TRANSFER_FEE);
-        const totalDeduction = amount + fee;
-        const senderBalance = await getChipBalance(socket.phone);
-        if (senderBalance < totalDeduction) return socket.emit('error_msg', `Insufficient chips. Need ${totalDeduction}.`);
-        const normalizedRecipient = normalizePhone(recipientPhone);
-        if (!normalizedRecipient || normalizedRecipient === socket.phone || !await userExists(normalizedRecipient)) return socket.emit('error_msg', 'Invalid recipient.');
-        if (!await deductChips(socket.phone, totalDeduction)) return socket.emit('error_msg', 'Transfer failed.');
-        await creditChips(normalizedRecipient, amount);
-        await creditHouseChips(fee);
-        const transferId = crypto.randomBytes(8).toString('hex');
-        const transfer = { id: transferId, type: 'sent', counterparty: normalizedRecipient, amount, fee, timestamp: Date.now(), status: 'completed' };
-        const receivedTransfer = { id: transferId, type: 'received', counterparty: socket.phone, amount, timestamp: Date.now(), status: 'completed' };
-        let sh = transferHistory.get(socket.phone) || []; sh.unshift(transfer); if (sh.length > 50) sh = sh.slice(0, 50); transferHistory.set(socket.phone, sh);
-        let rh = transferHistory.get(normalizedRecipient) || []; rh.unshift(receivedTransfer); if (rh.length > 50) rh = rh.slice(0, 50); transferHistory.set(normalizedRecipient, rh);
-        const rs = findSocketByPhone(normalizedRecipient); if (rs) rs.emit('chips_received', { from: socket.phone, amount, transferId });
-        socket.emit('transfer_complete', { to: normalizedRecipient, amount, fee, transferId, newBalance: await getChipBalance(socket.phone) });
-        broadcastChipStats();
-    });
-
-    socket.on('create_private_room', async () => {
-        if (!socket.authenticated || !socket.phone) return socket.emit('error_msg', 'Not authenticated.');
-        if (!await deductChips(socket.phone, ENTRY_FEE)) return socket.emit('error_msg', `Insufficient chips. Need ${ENTRY_FEE}. Buy chips to play.`);
-        socket.emit('balance_update', { chips: await getChipBalance(socket.phone) });
-        const roomCode = generateRoomCode();
-        privateRooms.set(roomCode, { code: roomCode, creator: socket.phone, creatorSocket: socket.id, playerSocket: null, playerPhone: null, createdAt: Date.now(), gameStarted: false });
-        socket.currentRoom = roomCode; socket.join(`room:${roomCode}`);
-        socket.emit('room_created', { roomCode, chips: await getChipBalance(socket.phone) });
-        socket.emit('waiting_for_opponent', { roomCode });
-    });
-
-    socket.on('join_private_room', async ({ roomCode }) => {
-        if (!socket.authenticated || !socket.phone) return socket.emit('error_msg', 'Not authenticated.');
-        const code = roomCode.toUpperCase(); const room = privateRooms.get(code);
-        if (!room || room.gameStarted || room.playerSocket || room.creator === socket.phone) return socket.emit('room_error', { error: 'Cannot join this room.' });
-        if (!await deductChips(socket.phone, ENTRY_FEE)) return socket.emit('error_msg', `Insufficient chips. Need ${ENTRY_FEE}. Buy chips to play.`);
-        socket.emit('balance_update', { chips: await getChipBalance(socket.phone) });
-        room.playerSocket = socket.id; room.playerPhone = socket.phone; room.gameStarted = true;
-        socket.currentRoom = code; socket.join(`room:${code}`);
-        const gameId = `private_${code}_${Date.now()}`;
-        games.set(gameId, { board: Array(9).fill(null), players: { X: room.creator, O: socket.phone }, sockets: { X: room.creatorSocket, O: socket.id }, currentTurn: 'X', isPrivate: true, roomCode: code });
-        socket.emit('private_match_found', { gameId, mySymbol: 'O', opponent: room.creator });
-        const cs = io.sockets.sockets.get(room.creatorSocket); if (cs) cs.emit('private_match_found', { gameId, mySymbol: 'X', opponent: socket.phone });
-    });
-
-    socket.on('cancel_private_room', async () => {
-        if (!socket.authenticated) return;
-        const room = privateRooms.get(socket.currentRoom);
-        if (room && room.creatorSocket === socket.id && !room.gameStarted) {
-            privateRooms.delete(socket.currentRoom); socket.currentRoom = null; socket.leave(`room:${socket.currentRoom}`);
-            await creditChips(socket.phone, ENTRY_FEE); socket.emit('balance_update', { chips: await getChipBalance(socket.phone) }); socket.emit('room_cancelled', {});
-        }
     });
 
     socket.on('find_match', async () => {
-        if (!socket.authenticated || !socket.phone) return socket.emit('error_msg', 'Not authenticated.');
-        if (socket.searching || socket.currentRoom) return socket.emit('error_msg', 'Cannot search now.');
-        if (!await deductChips(socket.phone, ENTRY_FEE)) return socket.emit('error_msg', `Insufficient chips. Need ${ENTRY_FEE}. Buy chips to play.`);
+        if (!socket.authenticated) return socket.emit('error_msg', 'Login required.');
+        if (!await deductChips(socket.phone, ENTRY_FEE)) return socket.emit('error_msg', `Insufficient chips. Need ${ENTRY_FEE}. Buy chips from admin.`);
         socket.searching = true;
         socket.emit('balance_update', { chips: await getChipBalance(socket.phone) });
         if (waitingSocket && waitingSocket.id !== socket.id && waitingSocket.searching) {
-            const opponent = waitingSocket; waitingSocket = null;
-            opponent.searching = false; socket.searching = false;
-            const gameId = 'game_' + crypto.randomUUID();
-            socket.join(gameId); opponent.join(gameId);
-            games.set(gameId, { board: Array(9).fill(null), players: { X: socket.phone, O: opponent.phone }, sockets: { X: socket.id, O: opponent.id }, currentTurn: 'X', isPrivate: false });
-            io.to(gameId).emit('match_found', { gameId, playerX: socket.id, playerO: opponent.id });
+            const o = waitingSocket; waitingSocket = null; o.searching = false; socket.searching = false;
+            const gid = 'game_' + crypto.randomUUID();
+            socket.join(gid); o.join(gid);
+            games.set(gid, { board: Array(9).fill(null), players: { X: socket.phone, O: o.phone }, sockets: { X: socket.id, O: o.id }, currentTurn: 'X', isPrivate: false });
+            io.to(gid).emit('match_found', { gameId: gid, playerX: socket.id, playerO: o.id });
             broadcastOnlineCount();
         } else { waitingSocket = socket; socket.emit('waiting', {}); broadcastOnlineCount(); }
     });
 
     socket.on('cancel_search', async () => {
-        if (!socket.authenticated || !socket.searching) return;
         if (waitingSocket && waitingSocket.id === socket.id) waitingSocket = null;
         socket.searching = false;
-        await creditChips(socket.phone, ENTRY_FEE); socket.emit('balance_update', { chips: await getChipBalance(socket.phone) }); socket.emit('search_cancelled', {}); broadcastOnlineCount();
+        await creditChips(socket.phone, ENTRY_FEE);
+        socket.emit('balance_update', { chips: await getChipBalance(socket.phone) });
+        socket.emit('search_cancelled', {});
+        broadcastOnlineCount();
     });
 
     socket.on('make_move', ({ gameId, index }) => {
-        const game = games.get(gameId);
-        if (!game || game.board[index] || index < 0 || index > 8) return;
-        const mySymbol = game.sockets.X === socket.id ? 'X' : game.sockets.O === socket.id ? 'O' : null;
-        if (!mySymbol || game.currentTurn !== mySymbol) return;
-        game.board[index] = mySymbol; game.currentTurn = mySymbol === 'X' ? 'O' : 'X';
-        io.to(gameId).emit('move_made', { index, symbol: mySymbol, nextTurn: game.currentTurn });
-        const result = checkWinner(game.board);
-        if (result) finishGame(gameId, game, result);
+        const g = games.get(gameId);
+        if (!g || g.board[index] || index < 0 || index > 8) return;
+        const s = g.sockets.X === socket.id ? 'X' : g.sockets.O === socket.id ? 'O' : null;
+        if (!s || g.currentTurn !== s) return;
+        g.board[index] = s; g.currentTurn = s === 'X' ? 'O' : 'X';
+        io.to(gameId).emit('move_made', { index, symbol: s, nextTurn: g.currentTurn });
+        const r = checkWinner(g.board);
+        if (r) finishGame(gameId, g, r);
     });
 
     socket.on('disconnect', async () => {
-        if (socket.currentRoom) { const room = privateRooms.get(socket.currentRoom); if (room && !room.gameStarted) privateRooms.delete(socket.currentRoom); }
-        if (waitingSocket && waitingSocket.id === socket.id) { waitingSocket = null; if (socket.phone && socket.searching) await creditChips(socket.phone, ENTRY_FEE); }
-        socket.searching = false; socket.authenticated = false;
-        for (const [gameId, game] of games.entries()) {
-            if (game.sockets.X === socket.id || game.sockets.O === socket.id) {
-                const oppSymbol = game.sockets.X === socket.id ? 'O' : 'X';
-                const oppSocket = io.sockets.sockets.get(game.sockets[oppSymbol]);
-                const newBal = await creditChips(game.players[oppSymbol], WIN_PRIZE);
-                if (oppSocket) { oppSocket.emit('balance_update', { chips: newBal }); oppSocket.emit('game_finished', { result: 'FORFEIT', winner: oppSymbol, winnerSocketId: game.sockets[oppSymbol], prize: WIN_PRIZE }); }
-                games.delete(gameId); break;
+        if (waitingSocket && waitingSocket.id === socket.id) { waitingSocket = null; if (socket.searching) await creditChips(socket.phone, ENTRY_FEE); }
+        for (const [gid, g] of games.entries()) {
+            if (g.sockets.X === socket.id || g.sockets.O === socket.id) {
+                const os = g.sockets.X === socket.id ? 'O' : 'X';
+                const opp = io.sockets.sockets.get(g.sockets[os]);
+                const nb = await creditChips(g.players[os], WIN_PRIZE);
+                if (opp) { opp.emit('balance_update', { chips: nb }); opp.emit('game_finished', { result: 'FORFEIT', winnerSocketId: g.sockets[os], prize: WIN_PRIZE }); }
+                games.delete(gid); break;
             }
         }
         broadcastOnlineCount();
@@ -467,7 +383,6 @@ io.on('connection', (socket) => {
 
 async function finishGame(gameId, game, result) {
     games.delete(gameId);
-    if (game.isPrivate && game.roomCode) privateRooms.delete(game.roomCode);
     if (result === 'DRAW') {
         await Promise.all([creditChips(game.players.X, DRAW_REFUND), creditChips(game.players.O, DRAW_REFUND)]);
         const [bX, bO] = await Promise.all([getChipBalance(game.players.X), getChipBalance(game.players.O)]);
@@ -475,9 +390,9 @@ async function finishGame(gameId, game, result) {
         if (sX) sX.emit('balance_update', { chips: bX }); if (sO) sO.emit('balance_update', { chips: bO });
         io.to(gameId).emit('game_finished', { result: 'DRAW', refund: DRAW_REFUND });
     } else {
-        const newBal = await creditChips(game.players[result], WIN_PRIZE);
+        const nb = await creditChips(game.players[result], WIN_PRIZE);
         const ws = io.sockets.sockets.get(game.sockets[result]);
-        if (ws) ws.emit('balance_update', { chips: newBal });
+        if (ws) ws.emit('balance_update', { chips: nb });
         io.to(gameId).emit('game_finished', { result: 'WIN', winner: result, winnerSocketId: game.sockets[result], prize: WIN_PRIZE });
     }
     broadcastOnlineCount(); broadcastChipStats();
@@ -485,13 +400,7 @@ async function finishGame(gameId, game, result) {
 
 async function start() {
     try { await redis.connect(); console.log('Redis connected'); } catch(e) { console.warn('Redis unavailable'); }
-    await updateCirculationStats();
     const PORT = process.env.PORT || 3000;
-    server.listen(PORT, () => {
-        console.log('🚀 TicTac Cash LIVE on port', PORT);
-        console.log('📱 Admin M-Pesa:', ADMIN_MPESA_NUMBER);
-        console.log('🎮 Mode:', DEMO_MODE ? 'DEMO' : 'PRODUCTION');
-        console.log('💰 No welcome bonus - players start with 0 chips');
-    });
+    server.listen(PORT, () => console.log('TicTac Cash LIVE on port', PORT, '| Admin secret:', ADMIN_SECRET.slice(0,8)+'...'));
 }
 start();
