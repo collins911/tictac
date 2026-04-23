@@ -3,34 +3,58 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TicTac Cash - Admin</title>
+    <title>TicTac Cash - Admin Panel</title>
     <style>
         :root{--green:#00ff88;--red:#ff4560;--gold:#ffd700;--bg:#0a0a0a;--surface:#111111;--surface2:#1a1a1a;--border:rgba(0,255,136,0.2);--text:#e8e8e8;--muted:#666}
         *{box-sizing:border-box;margin:0;padding:0}
-        body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-height:100vh;padding:20px}
-        .container{max-width:800px;margin:0 auto}
-        h1{color:var(--green);font-size:1.5rem;letter-spacing:3px;margin-bottom:20px;text-align:center}
-        h2{color:var(--gold);font-size:0.9rem;letter-spacing:2px;margin:16px 0 8px}
-        .login-box{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;max-width:400px;margin:100px auto;display:flex;flex-direction:column;gap:12px}
-        .login-box input{padding:12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--green);font-size:1rem;text-align:center}
-        .login-box button{padding:12px;background:var(--green);color:#000;border:none;border-radius:8px;cursor:pointer;font-weight:bold}
-        .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-bottom:16px}
-        .stat-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center}
-        .stat-label{font-size:0.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:2px;margin-bottom:8px}
-        .stat-value{font-size:1.8rem;font-weight:bold;color:var(--green)}
+        body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-height:100vh;padding:16px}
+        .container{max-width:950px;margin:0 auto}
+        h1{color:var(--green);font-size:1.3rem;letter-spacing:3px;margin-bottom:16px;text-align:center}
+        h2{color:var(--gold);font-size:0.8rem;letter-spacing:2px;margin:16px 0 8px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+        .login-box{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;max-width:420px;margin:80px auto;display:flex;flex-direction:column;gap:12px}
+        .login-box input{padding:12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--green);font-size:1rem;text-align:center;outline:none}
+        .login-box input:focus{border-color:var(--green);box-shadow:0 0 0 3px rgba(0,255,136,0.15)}
+        .login-box button{padding:12px;background:var(--green);color:#000;border:none;border-radius:8px;cursor:pointer;font-weight:bold;font-size:0.9rem;letter-spacing:2px}
+        .login-box button:hover{opacity:0.9}
+        .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px;margin-bottom:12px}
+        .stat-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px;text-align:center}
+        .stat-card.small{padding:10px}
+        .stat-label{font-size:0.5rem;color:var(--muted);text-transform:uppercase;letter-spacing:2px;margin-bottom:4px}
+        .stat-value{font-size:1.4rem;font-weight:bold;color:var(--green)}
         .stat-value.gold{color:var(--gold)}
         .stat-value.red{color:var(--red)}
-        table{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:12px}
-        th{background:var(--surface2);padding:10px;font-size:0.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;text-align:left}
-        td{padding:10px;font-size:0.65rem;border-bottom:1px solid rgba(255,255,255,0.03)}
-        .btn-approve{background:var(--green);color:#000;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:0.6rem;margin-right:4px}
-        .btn-reject{background:var(--red);color:#fff;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:0.6rem}
-        .btn-refresh{background:var(--gold);color:#000;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:0.7rem;margin-bottom:12px}
-        .hidden{display:none}
-        .section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:10px}
-        .empty{text-align:center;color:var(--muted);font-size:0.6rem;padding:20px}
-        #login-section{max-width:400px;margin:100px auto}
-        #dashboard-section{display:none}
+        .section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px}
+        table{width:100%;border-collapse:collapse;font-size:0.55rem}
+        th{background:var(--surface2);padding:8px 6px;font-size:0.5rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;text-align:left;position:sticky;top:0}
+        td{padding:7px 6px;border-bottom:1px solid rgba(255,255,255,0.03);font-size:0.55rem}
+        tr:hover{background:rgba(255,255,255,0.02)}
+        .btn-approve{background:var(--green);color:#000;border:none;padding:5px 8px;border-radius:4px;cursor:pointer;font-size:0.5rem;margin-right:3px}
+        .btn-approve:hover{opacity:0.8}
+        .btn-reject{background:var(--red);color:#fff;border:none;padding:5px 8px;border-radius:4px;cursor:pointer;font-size:0.5rem}
+        .btn-reject:hover{opacity:0.8}
+        .btn-refresh{background:var(--gold);color:#000;border:none;padding:7px 14px;border-radius:6px;cursor:pointer;font-size:0.6rem;letter-spacing:1px}
+        .btn-refresh:hover{opacity:0.8}
+        .btn-bulk{background:var(--green);color:#000;border:none;padding:5px 10px;border-radius:4px;cursor:pointer;font-size:0.5rem;margin-top:6px}
+        .btn-bulk:hover{opacity:0.8}
+        .btn-logout{background:transparent;color:var(--red);border:1px solid rgba(255,69,96,0.3);padding:7px 14px;border-radius:6px;cursor:pointer;font-size:0.55rem}
+        .hidden{display:none!important}
+        .empty{text-align:center;color:var(--muted);font-size:0.55rem;padding:16px}
+        .top-bar{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px}
+        .action-row{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end}
+        .input-small{padding:6px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--green);font-size:0.55rem;outline:none}
+        .input-small:focus{border-color:var(--green)}
+        .input-small.wide{flex:1;min-width:120px}
+        .tab-row{display:flex;gap:3px;margin-bottom:6px}
+        .tab{background:var(--surface2);border:1px solid var(--border);color:var(--muted);padding:7px 12px;border-radius:6px 6px 0 0;cursor:pointer;font-size:0.55rem;letter-spacing:1px}
+        .tab.active{background:var(--surface);border-bottom-color:var(--surface);color:var(--green)}
+        .badge{background:var(--red);color:#fff;border-radius:50%;padding:1px 5px;font-size:0.45rem;margin-left:3px}
+        .error-msg{color:var(--red);font-size:0.55rem;text-align:center;padding:6px;display:none}
+        .success-msg{color:var(--green);font-size:0.55rem;text-align:center;padding:6px;display:none}
+        .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+        .grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+        .grid-4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px}
+        label.mini{font-size:0.5rem;color:var(--muted);display:block;margin-bottom:3px;text-transform:uppercase;letter-spacing:1px}
+        @media(max-width:600px){.grid-2,.grid-3,.grid-4{grid-template-columns:1fr 1fr}}
     </style>
 </head>
 <body>
@@ -38,155 +62,394 @@
         <!-- Login -->
         <div id="login-section">
             <div class="login-box">
-                <h1 style="text-align:center">🔐 Admin Access</h1>
-                <input type="password" id="admin-secret" placeholder="Enter Admin Secret">
+                <h1 style="font-size:1.1rem;margin-bottom:2px">🔐 Admin Access</h1>
+                <p style="text-align:center;font-size:0.55rem;color:var(--muted);margin-bottom:6px">TicTac Cash Control Panel</p>
+                <input type="password" id="admin-secret" placeholder="Enter Admin Secret" autocomplete="off">
                 <button onclick="login()">Access Dashboard</button>
-                <div id="login-error" style="color:var(--red);font-size:0.7rem;text-align:center;display:none"></div>
+                <div id="login-error" class="error-msg"></div>
+                <div style="text-align:center;font-size:0.45rem;color:var(--muted);margin-top:6px">Session expires after 30 min of inactivity</div>
             </div>
         </div>
         
         <!-- Dashboard -->
-        <div id="dashboard-section">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-                <h1>🏦 TicTac Cash Admin</h1>
-                <button class="btn-refresh" onclick="loadAll()">🔄 Refresh</button>
+        <div id="dashboard-section" class="hidden">
+            <div class="top-bar">
+                <h1 style="margin:0">🏦 TicTac Cash Admin</h1>
+                <div style="display:flex;gap:6px;align-items:center">
+                    <span id="last-refresh" style="font-size:0.45rem;color:var(--muted)"></span>
+                    <button class="btn-refresh" onclick="loadAll()">🔄 Refresh</button>
+                    <button class="btn-logout" onclick="logout()">Logout</button>
+                </div>
             </div>
             
-            <div class="stats-grid" id="stats-grid"></div>
+            <div id="msg-success" class="success-msg"></div>
+            <div id="msg-error" class="error-msg"></div>
             
+            <!-- Stats Grid -->
+            <div class="stats-grid" id="stats-grid">
+                <div class="stat-card"><div class="stat-label">Loading...</div></div>
+            </div>
+            
+            <!-- Chip Management Section -->
             <div class="section">
-                <h2>Pending Payments (Chip Purchases)</h2>
+                <h2 style="margin-top:0">⚡ Chip Management</h2>
+                <div class="grid-2">
+                    <div>
+                        <label class="mini">Player Phone</label>
+                        <input type="text" id="action-phone" class="input-small wide" placeholder="2547XXXXXXXX">
+                    </div>
+                    <div>
+                        <label class="mini">Chip Amount</label>
+                        <input type="number" id="action-amount" class="input-small wide" placeholder="Amount" min="1">
+                    </div>
+                </div>
+                <div style="margin-top:6px">
+                    <label class="mini">Reason (optional)</label>
+                    <input type="text" id="action-reason" class="input-small wide" placeholder="e.g., Bonus, Refund, Promotion">
+                </div>
+                <div class="grid-3" style="margin-top:8px">
+                    <button class="btn-approve" onclick="addChipsToPlayer()">➕ Add Chips</button>
+                    <button class="btn-reject" onclick="removeChipsFromPlayer()">➖ Remove Chips</button>
+                    <button class="btn-approve" onclick="setPlayerChips()">🎯 Set Chips</button>
+                </div>
+                <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
+                    <button class="btn-bulk" onclick="bonusAllPlayers()">🎁 Send Bonus to ALL Players</button>
+                </div>
+            </div>
+            
+            <!-- Chip Economy Stats -->
+            <div class="section">
+                <h2 style="margin-top:0">📊 Chip Economy</h2>
+                <div class="grid-4" id="chip-economy-stats">
+                    <div class="stat-card small"><div class="stat-label">In Circulation</div><div class="stat-value">🪙 0</div></div>
+                    <div class="stat-card small"><div class="stat-label">House Balance</div><div class="stat-value gold">🪙 0</div></div>
+                    <div class="stat-card small"><div class="stat-label">Total Withdrawn</div><div class="stat-value red">💸 0</div></div>
+                    <div class="stat-card small"><div class="stat-label">Avg/Player</div><div class="stat-value">🪙 0</div></div>
+                </div>
+            </div>
+            
+            <!-- Tabs -->
+            <div class="tab-row">
+                <div class="tab active" onclick="switchTab('payments')">💳 Buy Requests <span class="badge" id="payments-count">0</span></div>
+                <div class="tab" onclick="switchTab('withdrawals')">🏦 Cash Outs <span class="badge" id="withdrawals-count">0</span></div>
+                <div class="tab" onclick="switchTab('history')">📋 History</div>
+            </div>
+            
+            <!-- Pending Payments -->
+            <div class="section" id="tab-payments">
+                <h2 style="margin-top:0">Pending Chip Purchases</h2>
+                <button class="btn-bulk" onclick="approveAllPayments()" style="margin-bottom:8px">✅ Approve All</button>
                 <div id="pending-payments"><div class="empty">Loading...</div></div>
             </div>
             
-            <div class="section">
-                <h2>Pending Withdrawals (Cash Outs)</h2>
+            <!-- Pending Withdrawals -->
+            <div class="section hidden" id="tab-withdrawals">
+                <h2 style="margin-top:0">Pending Cash Outs</h2>
+                <button class="btn-bulk" onclick="approveAllWithdrawals()" style="margin-bottom:8px">✅ Approve All</button>
                 <div id="pending-withdrawals"><div class="empty">Loading...</div></div>
+            </div>
+            
+            <!-- History -->
+            <div class="section hidden" id="tab-history">
+                <h2 style="margin-top:0">Recent Activity</h2>
+                <div id="activity-history"><div class="empty">Loading...</div></div>
             </div>
         </div>
     </div>
 
     <script>
         let adminSecret = '';
+        let sessionTimeout = null;
+        const SESSION_DURATION = 30 * 60 * 1000;
         const BASE = window.location.origin;
+        const $ = id => document.getElementById(id);
 
+        // ─── SECURITY ──────────────────────────────────────────────────────
+        function resetSessionTimer() {
+            if (sessionTimeout) clearTimeout(sessionTimeout);
+            sessionTimeout = setTimeout(logout, SESSION_DURATION);
+        }
+
+        function logout() {
+            adminSecret = '';
+            if (sessionTimeout) clearTimeout(sessionTimeout);
+            $('login-section').classList.remove('hidden');
+            $('dashboard-section').classList.add('hidden');
+            $('admin-secret').value = '';
+            $('login-error').style.display = 'none';
+            document.querySelectorAll('table').forEach(t => t.innerHTML = '');
+            $('stats-grid').innerHTML = '<div class="stat-card"><div class="stat-label">Loading...</div></div>';
+        }
+
+        function getHeaders() {
+            return {
+                'Content-Type': 'application/json',
+                'X-Admin-Secret': adminSecret,
+                'X-Requested-With': 'XMLHttpRequest'
+            };
+        }
+
+        function sanitize(str) {
+            if (typeof str !== 'string') return str;
+            return str.replace(/[<>"'&]/g, '').trim();
+        }
+
+        // ─── LOGIN ─────────────────────────────────────────────────────────
         async function login() {
-            const secret = document.getElementById('admin-secret').value.trim();
-            if (!secret) return;
-            
-            const res = await fetch(`${BASE}/admin/count?secret=${secret}`);
-            if (res.ok) {
-                adminSecret = secret;
-                document.getElementById('login-section').style.display = 'none';
-                document.getElementById('dashboard-section').style.display = 'block';
-                loadAll();
-            } else {
-                document.getElementById('login-error').style.display = 'block';
-                document.getElementById('login-error').textContent = 'Invalid secret';
+            const secret = $('admin-secret').value.trim();
+            if (!secret || secret.length < 8) {
+                $('login-error').style.display = 'block';
+                $('login-error').textContent = 'Enter valid admin secret (min 8 chars)';
+                return;
+            }
+            try {
+                const res = await fetch(`${BASE}/admin/count`, { headers: { 'X-Admin-Secret': secret } });
+                if (res.ok) {
+                    adminSecret = secret;
+                    $('login-error').style.display = 'none';
+                    $('login-section').classList.add('hidden');
+                    $('dashboard-section').classList.remove('hidden');
+                    resetSessionTimer();
+                    loadAll();
+                    setInterval(() => { if (adminSecret) loadAll(); }, 15000);
+                } else {
+                    $('login-error').style.display = 'block';
+                    $('login-error').textContent = 'Invalid admin secret';
+                    $('admin-secret').disabled = true;
+                    setTimeout(() => { $('admin-secret').disabled = false; $('admin-secret').focus(); }, 2000);
+                }
+            } catch (e) {
+                $('login-error').style.display = 'block';
+                $('login-error').textContent = 'Connection error. Try again.';
             }
         }
 
+        // ─── LOAD ALL ──────────────────────────────────────────────────────
         async function loadAll() {
-            await Promise.all([loadStats(), loadPendingPayments(), loadPendingWithdrawals()]);
+            if (!adminSecret) return logout();
+            resetSessionTimer();
+            await Promise.all([
+                loadStats(), loadChipEconomy(), loadPendingPayments(),
+                loadPendingWithdrawals(), loadActivityHistory()
+            ]);
+            $('last-refresh').textContent = 'Updated: ' + new Date().toLocaleTimeString();
         }
 
+        // ─── STATS ─────────────────────────────────────────────────────────
         async function loadStats() {
-            const res = await fetch(`${BASE}/admin/stats?secret=${adminSecret}`);
-            const d = await res.json();
-            document.getElementById('stats-grid').innerHTML = `
-                <div class="stat-card"><div class="stat-label">Total Users</div><div class="stat-value">${d.totalUsers}</div></div>
-                <div class="stat-card"><div class="stat-label">Online Players</div><div class="stat-value">${d.onlinePlayers}</div></div>
-                <div class="stat-card"><div class="stat-label">Active Games</div><div class="stat-value">${d.activeGames}</div></div>
-                <div class="stat-card"><div class="stat-label">Chips In Circulation</div><div class="stat-value">🪙 ${d.chipsInCirculation || 0}</div></div>
-                <div class="stat-card"><div class="stat-label">Chips Withdrawn</div><div class="stat-value red">💸 ${d.chipsWithdrawn || 0}</div></div>
-                <div class="stat-card"><div class="stat-label">🏠 House Balance</div><div class="stat-value gold">🪙 ${d.houseBalance || 0}</div></div>
-            `;
+            try {
+                const res = await fetch(`${BASE}/admin/stats`, { headers: { 'X-Admin-Secret': adminSecret } });
+                if (res.status === 401) return logout();
+                const d = await res.json();
+                $('stats-grid').innerHTML = `
+                    <div class="stat-card"><div class="stat-label">Total Users</div><div class="stat-value">${d.totalUsers||0}</div></div>
+                    <div class="stat-card"><div class="stat-label">Online Now</div><div class="stat-value">${d.onlinePlayers||0}</div></div>
+                    <div class="stat-card"><div class="stat-label">Active Games</div><div class="stat-value">${d.activeGames||0}</div></div>
+                    <div class="stat-card"><div class="stat-label">Chips Circulating</div><div class="stat-value">🪙 ${(d.chipsInCirculation||0).toLocaleString()}</div></div>
+                    <div class="stat-card"><div class="stat-label">Chips Withdrawn</div><div class="stat-value red">💸 ${(d.chipsWithdrawn||0).toLocaleString()}</div></div>
+                    <div class="stat-card"><div class="stat-label">🏠 House Balance</div><div class="stat-value gold">🪙 ${(d.houseBalance||0).toLocaleString()}</div></div>
+                    <div class="stat-card"><div class="stat-label">KES Value</div><div class="stat-value gold">KES ${(d.houseBalance||0).toLocaleString()}</div></div>
+                    <div class="stat-card"><div class="stat-label">Pending Requests</div><div class="stat-value">${(d.pendingWithdrawals||0)}</div></div>
+                `;
+            } catch (e) { $('stats-grid').innerHTML = '<div class="stat-card"><div class="stat-label">Error loading</div></div>'; }
         }
 
+        // ─── CHIP ECONOMY ──────────────────────────────────────────────────
+        async function loadChipEconomy() {
+            try {
+                const res = await fetch(`${BASE}/admin/chip-stats`, { headers: { 'X-Admin-Secret': adminSecret } });
+                if (res.status === 401) return logout();
+                const d = await res.json();
+                $('chip-economy-stats').innerHTML = `
+                    <div class="stat-card small"><div class="stat-label">In Circulation</div><div class="stat-value">🪙 ${(d.totalChipsInCirculation||0).toLocaleString()}</div></div>
+                    <div class="stat-card small"><div class="stat-label">House Balance</div><div class="stat-value gold">🪙 ${(d.houseChipBalance||0).toLocaleString()}</div></div>
+                    <div class="stat-card small"><div class="stat-label">Total Withdrawn</div><div class="stat-value red">💸 ${(d.totalChipsWithdrawn||0).toLocaleString()}</div></div>
+                    <div class="stat-card small"><div class="stat-label">Avg Per Player</div><div class="stat-value">🪙 ${(d.averageChipsPerPlayer||0).toLocaleString()}</div></div>
+                `;
+            } catch (e) { console.error('Error loading chip economy:', e); }
+        }
+
+        // ─── CHIP MANAGEMENT ───────────────────────────────────────────────
+        async function addChipsToPlayer() {
+            const phone = $('action-phone').value.trim();
+            const amount = parseInt($('action-amount').value);
+            const reason = $('action-reason').value.trim();
+            if (!phone || !amount || amount < 1) { showMsg('Enter phone and valid amount', 'error'); return; }
+            if (!confirm(`Add ${amount} chips to ${phone}?`)) return;
+            try {
+                const res = await fetch(`${BASE}/admin/add-chips`, { method:'POST', headers:getHeaders(), body:JSON.stringify({phone,amount,reason:reason||'Admin credit'}) });
+                if (res.status===401) return logout();
+                const d = await res.json();
+                showMsg(d.msg||'Chips added!','success'); loadAll();
+            } catch(e) { showMsg('Error','error'); }
+        }
+
+        async function removeChipsFromPlayer() {
+            const phone = $('action-phone').value.trim();
+            const amount = parseInt($('action-amount').value);
+            const reason = $('action-reason').value.trim();
+            if (!phone || !amount || amount < 1) { showMsg('Enter phone and valid amount','error'); return; }
+            if (!confirm(`Remove ${amount} chips from ${phone}?`)) return;
+            try {
+                const res = await fetch(`${BASE}/admin/remove-chips`, { method:'POST', headers:getHeaders(), body:JSON.stringify({phone,amount,reason:reason||'Admin deduction'}) });
+                if (res.status===401) return logout();
+                const d = await res.json();
+                showMsg(d.msg||'Chips removed!','success'); loadAll();
+            } catch(e) { showMsg('Error','error'); }
+        }
+
+        async function setPlayerChips() {
+            const phone = $('action-phone').value.trim();
+            const amount = parseInt($('action-amount').value);
+            const reason = $('action-reason').value.trim();
+            if (!phone || amount===undefined || amount<0) { showMsg('Enter phone and amount','error'); return; }
+            if (!confirm(`Set ${phone}'s chips to exactly ${amount}?`)) return;
+            try {
+                const res = await fetch(`${BASE}/admin/set-chips`, { method:'POST', headers:getHeaders(), body:JSON.stringify({phone,amount,reason:reason||'Admin reset'}) });
+                if (res.status===401) return logout();
+                const d = await res.json();
+                showMsg(d.msg||`Chips set to ${amount}!`,'success'); loadAll();
+            } catch(e) { showMsg('Error','error'); }
+        }
+
+        async function bonusAllPlayers() {
+            const amount = parseInt($('action-amount').value);
+            const reason = $('action-reason').value.trim();
+            if (!amount || amount<1) { showMsg('Enter bonus amount first','error'); return; }
+            if (!confirm(`Send ${amount} bonus chips to ALL players?`)) return;
+            try {
+                const res = await fetch(`${BASE}/admin/bonus-all`, { method:'POST', headers:getHeaders(), body:JSON.stringify({amount,reason:reason||'Bonus!'}) });
+                if (res.status===401) return logout();
+                const d = await res.json();
+                showMsg(d.msg||'Bonus sent!','success'); loadAll();
+            } catch(e) { showMsg('Error','error'); }
+        }
+
+        // ─── PENDING PAYMENTS ──────────────────────────────────────────────
         async function loadPendingPayments() {
-            const res = await fetch(`${BASE}/admin/pending-payments?secret=${adminSecret}`);
-            const d = await res.json();
-            if (!d.pending || !d.pending.length) {
-                document.getElementById('pending-payments').innerHTML = '<div class="empty">No pending payments</div>';
-                return;
-            }
-            document.getElementById('pending-payments').innerHTML = `
-                <table><thead><tr><th>Time</th><th>Phone</th><th>Amount</th><th>Chips</th><th>Code</th><th>Action</th></tr></thead><tbody>
-                ${d.pending.map(p => `
-                    <tr>
-                        <td>${new Date(p.timestamp).toLocaleTimeString()}</td>
-                        <td>${p.phone}</td>
-                        <td>KES ${p.amount}</td>
-                        <td>${p.chips} 🪙</td>
-                        <td style="color:var(--gold)">${p.mpesaCode}</td>
-                        <td>
-                            <button class="btn-approve" onclick="approvePay('${p.mpesaCode}')">✅</button>
-                            <button class="btn-reject" onclick="rejectPay('${p.mpesaCode}')">❌</button>
-                        </td>
-                    </tr>
-                `).join('')}
-                </tbody></table>`;
+            try {
+                const res = await fetch(`${BASE}/admin/pending-payments`, { headers:{'X-Admin-Secret':adminSecret} });
+                if (res.status===401) return logout();
+                const d = await res.json();
+                const count = d.pending ? d.pending.length : 0;
+                $('payments-count').textContent = count;
+                if (!d.pending||!d.pending.length) { $('pending-payments').innerHTML='<div class="empty">✅ No pending purchase requests</div>'; return; }
+                $('pending-payments').innerHTML = `<table><thead><tr><th>Time</th><th>Phone</th><th>Chips</th><th>Amount</th><th>Code</th><th>Action</th></tr></thead><tbody>${d.pending.map(p=>`<tr><td>${new Date(p.timestamp).toLocaleTimeString()}</td><td>${sanitize(p.phone)}</td><td>${p.chips} 🪙</td><td>KES ${p.amount}</td><td style="color:var(--gold)">${sanitize(p.mpesaCode)}</td><td><button class="btn-approve" onclick="approvePayment('${sanitize(p.mpesaCode)}')">✅</button><button class="btn-reject" onclick="rejectPayment('${sanitize(p.mpesaCode)}')">❌</button></td></tr>`).join('')}</tbody></table>`;
+            } catch(e) { $('pending-payments').innerHTML='<div class="empty">Error loading</div>'; }
         }
 
+        async function approvePayment(code) {
+            if (!confirm(`Approve payment ${code}?`)) return;
+            try {
+                const res = await fetch(`${BASE}/admin/verify-payment`,{method:'POST',headers:getHeaders(),body:JSON.stringify({mpesaCode:code,approved:true})});
+                if (res.status===401) return logout();
+                showMsg('Payment approved!','success'); loadAll();
+            } catch(e) { showMsg('Error','error'); }
+        }
+
+        async function rejectPayment(code) {
+            if (!confirm(`Reject payment ${code}?`)) return;
+            try {
+                const res = await fetch(`${BASE}/admin/verify-payment`,{method:'POST',headers:getHeaders(),body:JSON.stringify({mpesaCode:code,approved:false})});
+                if (res.status===401) return logout();
+                showMsg('Payment rejected','error'); loadAll();
+            } catch(e) { showMsg('Error','error'); }
+        }
+
+        async function approveAllPayments() {
+            const btns = document.querySelectorAll('#pending-payments .btn-approve');
+            if (!btns.length) { showMsg('No pending payments','error'); return; }
+            if (!confirm(`Approve ALL (${btns.length}) payments?`)) return;
+            for (const btn of btns) {
+                const code = btn.getAttribute('onclick').match(/'([^']+)'/)[1];
+                await fetch(`${BASE}/admin/verify-payment`,{method:'POST',headers:getHeaders(),body:JSON.stringify({mpesaCode:code,approved:true})});
+            }
+            showMsg('All approved!','success'); loadAll();
+        }
+
+        // ─── PENDING WITHDRAWALS ───────────────────────────────────────────
         async function loadPendingWithdrawals() {
-            const res = await fetch(`${BASE}/admin/pending-withdrawals?secret=${adminSecret}`);
-            const d = await res.json();
-            if (!d.pending || !d.pending.length) {
-                document.getElementById('pending-withdrawals').innerHTML = '<div class="empty">No pending withdrawals</div>';
-                return;
+            try {
+                const res = await fetch(`${BASE}/admin/pending-withdrawals`, { headers:{'X-Admin-Secret':adminSecret} });
+                if (res.status===401) return logout();
+                const d = await res.json();
+                const count = d.pending ? d.pending.length : 0;
+                $('withdrawals-count').textContent = count;
+                if (!d.pending||!d.pending.length) { $('pending-withdrawals').innerHTML='<div class="empty">✅ No pending cash outs</div>'; return; }
+                $('pending-withdrawals').innerHTML = `<table><thead><tr><th>Time</th><th>Phone</th><th>Chips</th><th>KES</th><th>Fee</th><th>Action</th></tr></thead><tbody>${d.pending.map(w=>`<tr><td>${new Date(w.timestamp).toLocaleTimeString()}</td><td>${sanitize(w.phone)}</td><td>${w.chips} 🪙</td><td style="color:var(--gold)">KES ${w.chips}</td><td style="color:var(--muted)">${w.fee} 🪙</td><td><button class="btn-approve" onclick="approveWithdrawal('${sanitize(w.id)}')">✅ Pay</button><button class="btn-reject" onclick="rejectWithdrawal('${sanitize(w.id)}')">❌</button></td></tr>`).join('')}</tbody></table>`;
+            } catch(e) { $('pending-withdrawals').innerHTML='<div class="empty">Error loading</div>'; }
+        }
+
+        async function approveWithdrawal(id) {
+            if (!confirm(`Approve withdrawal? Send KES to player.`)) return;
+            try {
+                const res = await fetch(`${BASE}/admin/process-withdrawal`,{method:'POST',headers:getHeaders(),body:JSON.stringify({withdrawalId:id,approved:true})});
+                if (res.status===401) return logout();
+                showMsg('Withdrawal approved! Send M-Pesa now.','success'); loadAll();
+            } catch(e) { showMsg('Error','error'); }
+        }
+
+        async function rejectWithdrawal(id) {
+            if (!confirm(`Reject withdrawal? Chips will be refunded.`)) return;
+            try {
+                const res = await fetch(`${BASE}/admin/process-withdrawal`,{method:'POST',headers:getHeaders(),body:JSON.stringify({withdrawalId:id,approved:false})});
+                if (res.status===401) return logout();
+                showMsg('Withdrawal rejected. Chips refunded.','error'); loadAll();
+            } catch(e) { showMsg('Error','error'); }
+        }
+
+        async function approveAllWithdrawals() {
+            const btns = document.querySelectorAll('#pending-withdrawals .btn-approve');
+            if (!btns.length) { showMsg('No pending withdrawals','error'); return; }
+            if (!confirm(`Approve ALL (${btns.length}) withdrawals?`)) return;
+            for (const btn of btns) {
+                const id = btn.getAttribute('onclick').match(/'([^']+)'/)[1];
+                await fetch(`${BASE}/admin/process-withdrawal`,{method:'POST',headers:getHeaders(),body:JSON.stringify({withdrawalId:id,approved:true})});
             }
-            document.getElementById('pending-withdrawals').innerHTML = `
-                <table><thead><tr><th>Time</th><th>Phone</th><th>Chips</th><th>KES Value</th><th>Fee</th><th>Action</th></tr></thead><tbody>
-                ${d.pending.map(w => `
-                    <tr>
-                        <td>${new Date(w.timestamp).toLocaleTimeString()}</td>
-                        <td>${w.phone}</td>
-                        <td>${w.chips} 🪙</td>
-                        <td style="color:var(--gold)">KES ${w.chips}</td>
-                        <td>${w.fee} 🪙</td>
-                        <td>
-                            <button class="btn-approve" onclick="approveWithdraw('${w.id}')">✅ Pay</button>
-                            <button class="btn-reject" onclick="rejectWithdraw('${w.id}')">❌</button>
-                        </td>
-                    </tr>
-                `).join('')}
-                </tbody></table>`;
+            showMsg('All approved! Send M-Pesa to each.','success'); loadAll();
         }
 
-        async function approvePay(code) {
-            await fetch(`${BASE}/admin/verify-payment?secret=${adminSecret}`, {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ mpesaCode: code, approved: true })
-            });
-            loadAll();
+        // ─── HISTORY ───────────────────────────────────────────────────────
+        async function loadActivityHistory() {
+            try {
+                const [payRes, withRes] = await Promise.all([
+                    fetch(`${BASE}/admin/pending-payments`,{headers:{'X-Admin-Secret':adminSecret}}),
+                    fetch(`${BASE}/admin/pending-withdrawals`,{headers:{'X-Admin-Secret':adminSecret}})
+                ]);
+                if (payRes.status===401||withRes.status===401) return logout();
+                const payments = await payRes.json();
+                const withdrawals = await withRes.json();
+                const all = [];
+                if (payments.pending) payments.pending.forEach(p=>all.push({type:'💳 Buy',phone:p.phone,details:`${p.chips} chips KES ${p.amount}`,time:p.timestamp,status:'pending'}));
+                if (withdrawals.pending) withdrawals.pending.forEach(w=>all.push({type:'🏦 Cash',phone:w.phone,details:`${w.chips} chips KES ${w.chips}`,time:w.timestamp,status:'pending'}));
+                all.sort((a,b)=>new Date(b.time)-new Date(a.time));
+                if (!all.length) { $('activity-history').innerHTML='<div class="empty">No recent activity</div>'; return; }
+                $('activity-history').innerHTML=`<table><thead><tr><th>Time</th><th>Type</th><th>Phone</th><th>Details</th><th>Status</th></tr></thead><tbody>${all.slice(0,20).map(a=>`<tr><td>${new Date(a.time).toLocaleString()}</td><td>${a.type}</td><td>${sanitize(a.phone)}</td><td>${sanitize(a.details)}</td><td style="color:var(--gold)">● pending</td></tr>`).join('')}</tbody></table>`;
+            } catch(e) { $('activity-history').innerHTML='<div class="empty">Error loading</div>'; }
         }
 
-        async function rejectPay(code) {
-            await fetch(`${BASE}/admin/verify-payment?secret=${adminSecret}`, {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ mpesaCode: code, approved: false })
-            });
-            loadAll();
+        // ─── UI HELPERS ────────────────────────────────────────────────────
+        function switchTab(tab) {
+            document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+            $('tab-payments').classList.add('hidden');
+            $('tab-withdrawals').classList.add('hidden');
+            $('tab-history').classList.add('hidden');
+            if (tab==='payments') { document.querySelectorAll('.tab')[0].classList.add('active'); $('tab-payments').classList.remove('hidden'); }
+            else if (tab==='withdrawals') { document.querySelectorAll('.tab')[1].classList.add('active'); $('tab-withdrawals').classList.remove('hidden'); }
+            else if (tab==='history') { document.querySelectorAll('.tab')[2].classList.add('active'); $('tab-history').classList.remove('hidden'); }
         }
 
-        async function approveWithdraw(id) {
-            await fetch(`${BASE}/admin/process-withdrawal?secret=${adminSecret}`, {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ withdrawalId: id, approved: true })
-            });
-            loadAll();
+        function showMsg(msg, type) {
+            const el = type==='success' ? $('msg-success') : $('msg-error');
+            el.style.display='block'; el.textContent=msg;
+            setTimeout(()=>{el.style.display='none'},4000);
         }
 
-        async function rejectWithdraw(id) {
-            await fetch(`${BASE}/admin/process-withdrawal?secret=${adminSecret}`, {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ withdrawalId: id, approved: false })
-            });
-            loadAll();
-        }
-
-        // Auto-refresh every 30 seconds
-        if (adminSecret) setInterval(loadAll, 30000);
+        // ─── KEYBOARD SHORTCUTS ────────────────────────────────────────────
+        document.addEventListener('keydown',(e)=>{ if(e.ctrlKey&&e.key==='l'){e.preventDefault();logout();} });
+        document.addEventListener('contextmenu',(e)=>{ if(e.target.closest('table')||e.target.closest('.stat-card'))e.preventDefault(); });
+        $('admin-secret').addEventListener('keydown',(e)=>{ if(e.key==='Enter')login(); });
+        window.addEventListener('beforeunload',()=>{ adminSecret=''; });
     </script>
 </body>
 </html>
