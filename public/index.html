@@ -9,738 +9,97 @@
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
     <style>
         :root {
-            --green: #00ff88;
-            --green-dim: #00cc6a;
-            --green-glow: rgba(0, 255, 136, 0.25);
-            --red: #ff4560;
-            --gold: #ffd700;
-            --bg: #0a0a0a;
-            --surface: #111111;
-            --surface2: #1a1a1a;
-            --border: rgba(0, 255, 136, 0.2);
-            --text: #e8e8e8;
-            --muted: #666;
+            --green: #00ff88; --green-dim: #00cc6a; --green-glow: rgba(0, 255, 136, 0.25);
+            --red: #ff4560; --gold: #ffd700; --bg: #0a0a0a; --surface: #111111;
+            --surface2: #1a1a1a; --border: rgba(0, 255, 136, 0.2); --text: #e8e8e8; --muted: #666;
         }
-
         * { box-sizing: border-box; margin: 0; padding: 0; }
-
         body {
-            background: var(--bg);
-            color: var(--text);
-            font-family: 'DM Mono', monospace;
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            overflow-x: hidden;
+            background: var(--bg); color: var(--text); font-family: 'DM Mono', monospace;
+            min-height: 100vh; display: flex; flex-direction: column; align-items: center;
+            justify-content: center; overflow-x: hidden;
         }
-
         body::before {
-            content: '';
-            position: fixed;
-            inset: 0;
-            background-image:
-                linear-gradient(rgba(0,255,136,0.03) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(0,255,136,0.03) 1px, transparent 1px);
-            background-size: 40px 40px;
-            pointer-events: none;
-            z-index: 0;
+            content: ''; position: fixed; inset: 0;
+            background-image: linear-gradient(rgba(0,255,136,0.03) 1px, transparent 1px),
+                            linear-gradient(90deg, rgba(0,255,136,0.03) 1px, transparent 1px);
+            background-size: 40px 40px; pointer-events: none; z-index: 0;
         }
-
-        .screen {
-            position: relative;
-            z-index: 1;
-            width: 100%;
-            max-width: 500px;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 16px;
-        }
-
+        .screen { position: relative; z-index: 1; width: 100%; max-width: 500px; padding: 20px; display: flex; flex-direction: column; align-items: center; gap: 16px; }
         .hidden { display: none !important; }
-
-        .logo {
-            font-family: 'Bebas Neue', sans-serif;
-            font-size: 3.5rem;
-            letter-spacing: 6px;
-            color: var(--green);
-            text-shadow: 0 0 30px var(--green-glow), 0 0 60px rgba(0,255,136,0.1);
-            line-height: 1;
-        }
+        .logo { font-family: 'Bebas Neue', sans-serif; font-size: 3.5rem; letter-spacing: 6px; color: var(--green); text-shadow: 0 0 30px var(--green-glow), 0 0 60px rgba(0,255,136,0.1); line-height: 1; }
         .logo span { color: var(--text); }
-        .tagline {
-            font-size: 0.7rem;
-            letter-spacing: 4px;
-            color: var(--muted);
-            text-transform: uppercase;
-            margin-top: -12px;
-        }
-
-        .demo-banner {
-            width: 100%;
-            background: rgba(255, 215, 0, 0.08);
-            border: 1px solid rgba(255, 215, 0, 0.3);
-            border-radius: 10px;
-            padding: 10px 16px;
-            font-size: 0.65rem;
-            letter-spacing: 2px;
-            color: var(--gold);
-            text-align: center;
-            text-transform: uppercase;
-        }
-
-        .card {
-            width: 100%;
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 16px;
-            padding: 24px;
-        }
-
-        .input-group {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            width: 100%;
-        }
-        .input-group label {
-            font-size: 0.65rem;
-            letter-spacing: 3px;
-            color: var(--muted);
-            text-transform: uppercase;
-        }
-        input {
-            background: var(--surface2);
-            border: 1px solid var(--border);
-            border-radius: 10px;
-            padding: 14px 16px;
-            color: var(--green);
-            font-family: 'DM Mono', monospace;
-            font-size: 1rem;
-            width: 100%;
-            transition: border-color 0.2s, box-shadow 0.2s;
-            outline: none;
-        }
-        input:focus {
-            border-color: var(--green);
-            box-shadow: 0 0 0 3px var(--green-glow);
-        }
-        input.error { border-color: var(--red); }
-
-        .pin-input {
-            font-size: 2rem !important;
-            text-align: center;
-            letter-spacing: 8px;
-        }
-
-        .btn {
-            width: 100%;
-            padding: 14px;
-            border: none;
-            border-radius: 10px;
-            font-family: 'Bebas Neue', sans-serif;
-            font-size: 1.1rem;
-            letter-spacing: 3px;
-            cursor: pointer;
-            transition: transform 0.15s, box-shadow 0.15s, opacity 0.2s;
-        }
-        .btn:hover:not(:disabled) {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 24px rgba(0,0,0,0.4);
-        }
-        .btn:active:not(:disabled) { transform: translateY(0); }
+        .tagline { font-size: 0.7rem; letter-spacing: 4px; color: var(--muted); text-transform: uppercase; margin-top: -12px; }
+        .demo-banner { width: 100%; background: rgba(255, 215, 0, 0.08); border: 1px solid rgba(255, 215, 0, 0.3); border-radius: 10px; padding: 10px 16px; font-size: 0.65rem; letter-spacing: 2px; color: var(--gold); text-align: center; text-transform: uppercase; }
+        .card { width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 20px; }
+        .input-group { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+        .input-group label { font-size: 0.65rem; letter-spacing: 3px; color: var(--muted); text-transform: uppercase; }
+        input { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; color: var(--green); font-family: 'DM Mono', monospace; font-size: 1rem; width: 100%; transition: border-color 0.2s, box-shadow 0.2s; outline: none; }
+        input:focus { border-color: var(--green); box-shadow: 0 0 0 3px var(--green-glow); }
+        .pin-input { font-size: 2rem !important; text-align: center; letter-spacing: 8px; }
+        .btn { width: 100%; padding: 14px; border: none; border-radius: 10px; font-family: 'Bebas Neue', sans-serif; font-size: 1.1rem; letter-spacing: 3px; cursor: pointer; transition: transform 0.15s, box-shadow 0.15s, opacity 0.2s; }
+        .btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
         .btn:disabled { opacity: 0.4; cursor: not-allowed; }
-
-        .btn-primary {
-            background: var(--green);
-            color: #000;
-            box-shadow: 0 0 20px var(--green-glow);
-        }
-        .btn-primary:hover:not(:disabled) { box-shadow: 0 0 30px var(--green-glow); }
-
-        .btn-outline {
-            background: transparent;
-            color: var(--green);
-            border: 1px solid var(--border);
-        }
-        .btn-outline:hover:not(:disabled) {
-            border-color: var(--green);
-            background: rgba(0,255,136,0.05);
-        }
-
-        .btn-danger {
-            background: transparent;
-            color: var(--red);
-            border: 1px solid rgba(255,69,96,0.3);
-            font-size: 0.85rem;
-            padding: 10px;
-            letter-spacing: 2px;
-        }
-
-        .btn-small {
-            padding: 8px 12px;
-            font-size: 0.8rem;
-            width: auto;
-        }
-
-        .btn-success {
-            background: var(--green);
-            color: #000;
-        }
-
-        .btn-gold {
-            background: var(--gold);
-            color: #000;
-        }
-
-        .forgot-pin-link {
-            text-align: center;
-            margin-top: 12px;
-        }
-
-        .forgot-pin-link a {
-            color: var(--gold);
-            font-size: 0.65rem;
-            letter-spacing: 2px;
-            text-decoration: none;
-            cursor: pointer;
-            text-transform: uppercase;
-        }
-
-        .forgot-pin-link a:hover {
-            text-decoration: underline;
-        }
-
-        .wallet-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 8px;
-        }
-        .wallet-label {
-            font-size: 0.6rem;
-            letter-spacing: 3px;
-            color: var(--muted);
-            text-transform: uppercase;
-        }
-        .wallet-phone {
-            font-size: 0.65rem;
-            color: var(--muted);
-        }
-        #balance {
-            font-family: 'Bebas Neue', sans-serif;
-            font-size: 2.5rem;
-            color: var(--green);
-            text-shadow: 0 0 20px var(--green-glow);
-            letter-spacing: 2px;
-            transition: color 0.3s;
-        }
-        #balance.credit { color: var(--gold); }
-
-        #status {
-            width: 100%;
-            padding: 12px 16px;
-            border-radius: 10px;
-            background: var(--surface);
-            border: 1px solid var(--border);
-            font-size: 0.75rem;
-            letter-spacing: 2px;
-            color: var(--muted);
-            text-align: center;
-            text-transform: uppercase;
-            min-height: 46px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.3s;
-        }
+        .btn-primary { background: var(--green); color: #000; box-shadow: 0 0 20px var(--green-glow); }
+        .btn-outline { background: transparent; color: var(--green); border: 1px solid var(--border); }
+        .btn-danger { background: transparent; color: var(--red); border: 1px solid rgba(255,69,96,0.3); font-size: 0.85rem; padding: 10px; letter-spacing: 2px; }
+        .btn-small { padding: 8px 12px; font-size: 0.8rem; width: auto; }
+        .btn-success { background: var(--green); color: #000; }
+        .btn-gold { background: var(--gold); color: #000; }
+        .forgot-pin-link { text-align: center; margin-top: 12px; }
+        .forgot-pin-link a { color: var(--gold); font-size: 0.65rem; letter-spacing: 2px; text-decoration: none; cursor: pointer; text-transform: uppercase; }
+        .wallet-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+        .wallet-label { font-size: 0.6rem; letter-spacing: 3px; color: var(--muted); text-transform: uppercase; }
+        .wallet-phone { font-size: 0.65rem; color: var(--muted); }
+        #chip-balance { font-family: 'Bebas Neue', sans-serif; font-size: 2.5rem; color: var(--gold); text-shadow: 0 0 20px rgba(255,215,0,0.3); letter-spacing: 2px; transition: color 0.3s; }
+        #status { width: 100%; padding: 12px 16px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); font-size: 0.75rem; letter-spacing: 2px; color: var(--muted); text-align: center; text-transform: uppercase; min-height: 46px; display: flex; align-items: center; justify-content: center; transition: all 0.3s; }
         #status.active { color: var(--green); border-color: var(--green); }
         #status.warn { color: var(--gold); border-color: rgba(255,215,0,0.3); }
         #status.error { color: var(--red); border-color: rgba(255,69,96,0.3); }
-
-        /* Invite Panel */
-        .invite-panel {
-            width: 100%;
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            overflow: hidden;
-        }
-
-        .invite-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 12px 16px;
-            background: var(--surface2);
-            border-bottom: 1px solid var(--border);
-            cursor: pointer;
-            user-select: none;
-        }
-
-        .invite-header:hover {
-            background: rgba(0, 255, 136, 0.05);
-        }
-
-        .invite-title {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 0.7rem;
-            letter-spacing: 2px;
-            color: var(--green);
-            text-transform: uppercase;
-        }
-
-        .invite-toggle {
-            color: var(--muted);
-            font-size: 0.8rem;
-            transition: transform 0.3s;
-        }
-
-        .invite-toggle.open { transform: rotate(180deg); }
-
-        .invite-content {
-            max-height: 0;
-            overflow: hidden;
-            transition: max-height 0.3s ease-out;
-        }
-
-        .invite-content.open {
-            max-height: 500px;
-        }
-
-        .invite-body {
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-        }
-
-        .room-code-display {
-            background: var(--surface2);
-            border: 1px solid var(--green-glow);
-            border-radius: 12px;
-            padding: 20px;
-            text-align: center;
-        }
-
-        .room-code-label {
-            font-size: 0.6rem;
-            letter-spacing: 3px;
-            color: var(--muted);
-            text-transform: uppercase;
-            margin-bottom: 8px;
-        }
-
-        .room-code {
-            font-family: 'Bebas Neue', sans-serif;
-            font-size: 3.5rem;
-            letter-spacing: 8px;
-            color: var(--green);
-            text-shadow: 0 0 20px var(--green-glow);
-            margin-bottom: 16px;
-        }
-
-        .invite-link-container {
-            display: flex;
-            gap: 8px;
-        }
-
-        .invite-link-input {
-            flex: 1;
-            background: var(--bg);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 10px 12px;
-            color: var(--text);
-            font-family: 'DM Mono', monospace;
-            font-size: 0.7rem;
-            text-align: center;
-        }
-
-        .share-buttons {
-            display: flex;
-            gap: 8px;
-            justify-content: center;
-            margin-top: 12px;
-        }
-
-        .share-btn {
-            background: transparent;
-            border: 1px solid var(--border);
-            color: var(--text);
-            padding: 10px 16px;
-            border-radius: 8px;
-            font-size: 0.65rem;
-            cursor: pointer;
-            transition: all 0.2s;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .share-btn:hover {
-            border-color: var(--green);
-            color: var(--green);
-        }
-
-        .join-room-section {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-
-        .join-input-group {
-            display: flex;
-            gap: 8px;
-        }
-
-        .join-input {
-            flex: 1;
-            background: var(--bg);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 12px;
-            color: var(--green);
-            font-family: 'DM Mono', monospace;
-            font-size: 1.2rem;
-            text-align: center;
-            text-transform: uppercase;
-            letter-spacing: 4px;
-        }
-
-        .waiting-room {
-            text-align: center;
-            padding: 20px;
-        }
-
-        .waiting-animation {
-            font-size: 2rem;
-            margin-bottom: 16px;
-        }
-
-        .waiting-text {
-            font-size: 0.8rem;
-            color: var(--muted);
-            letter-spacing: 2px;
-        }
-
-        /* Game History Panel */
-        .history-panel {
-            width: 100%;
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            overflow: hidden;
-        }
-
-        .history-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 12px 16px;
-            background: var(--surface2);
-            border-bottom: 1px solid var(--border);
-            cursor: pointer;
-            user-select: none;
-        }
-
-        .history-header:hover {
-            background: rgba(0, 255, 136, 0.05);
-        }
-
-        .history-title {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 0.7rem;
-            letter-spacing: 2px;
-            color: var(--muted);
-            text-transform: uppercase;
-        }
-
-        .history-stats {
-            display: flex;
-            gap: 16px;
-            font-size: 0.7rem;
-        }
-
-        .stat-win { color: var(--green); }
-        .stat-loss { color: var(--red); }
-        .stat-draw { color: var(--gold); }
-
-        .history-toggle {
-            color: var(--muted);
-            font-size: 0.8rem;
-            transition: transform 0.3s;
-        }
-
-        .history-toggle.open { transform: rotate(180deg); }
-
-        .history-content {
-            max-height: 0;
-            overflow: hidden;
-            transition: max-height 0.3s ease-out;
-        }
-
-        .history-content.open {
-            max-height: 300px;
-            overflow-y: auto;
-        }
-
-        .history-list {
-            padding: 8px;
-        }
-
-        .history-item {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 10px 12px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-            font-size: 0.65rem;
-            letter-spacing: 1px;
-        }
-
-        .history-item:last-child {
-            border-bottom: none;
-        }
-
-        .history-result {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .result-icon {
-            font-size: 1rem;
-            width: 20px;
-            text-align: center;
-        }
-
-        .result-win { color: var(--green); }
-        .result-loss { color: var(--red); }
-        .result-draw { color: var(--gold); }
-
-        .history-time {
-            color: var(--muted);
-            font-size: 0.55rem;
-        }
-
-        .history-amount {
-            font-family: 'DM Mono', monospace;
-        }
-
-        .history-amount.positive { color: var(--green); }
-        .history-amount.negative { color: var(--red); }
-
-        .clear-history-btn {
-            background: transparent;
-            border: 1px solid var(--border);
-            color: var(--muted);
-            padding: 6px 12px;
-            border-radius: 6px;
-            font-size: 0.55rem;
-            cursor: pointer;
-            margin: 8px;
-            transition: all 0.2s;
-        }
-
-        .clear-history-btn:hover {
-            border-color: var(--red);
-            color: var(--red);
-        }
-
-        .empty-history {
-            text-align: center;
-            padding: 20px;
-            color: var(--muted);
-            font-size: 0.65rem;
-        }
-
-        .board-wrap {
-            position: relative;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 12px;
-            width: 100%;
-        }
-        .turn-indicators {
-            width: 100%;
-            display: flex;
-            justify-content: space-between;
-            padding: 0 4px;
-        }
-        .player-indicator {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 8px 12px;
-            border-radius: 8px;
-            border: 1px solid transparent;
-            font-size: 0.65rem;
-            letter-spacing: 2px;
-            color: var(--muted);
-            transition: all 0.3s;
-        }
-        .player-indicator.active-turn {
-            border-color: var(--green);
-            color: var(--green);
-            background: rgba(0,255,136,0.05);
-        }
-        .player-indicator .symbol {
-            font-family: 'Bebas Neue', sans-serif;
-            font-size: 1.2rem;
-        }
+        .board-wrap { position: relative; display: flex; flex-direction: column; align-items: center; gap: 12px; width: 100%; }
+        .turn-indicators { width: 100%; display: flex; justify-content: space-between; padding: 0 4px; }
+        .player-indicator { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 8px; border: 1px solid transparent; font-size: 0.65rem; letter-spacing: 2px; color: var(--muted); transition: all 0.3s; }
+        .player-indicator.active-turn { border-color: var(--green); color: var(--green); background: rgba(0,255,136,0.05); }
+        .player-indicator .symbol { font-family: 'Bebas Neue', sans-serif; font-size: 1.2rem; }
         .player-indicator.x-side .symbol { color: var(--green); }
         .player-indicator.o-side .symbol { color: var(--red); }
-
-        .grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 8px;
-            width: 100%;
-            max-width: 300px;
-        }
-        .cell {
-            aspect-ratio: 1;
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            font-family: 'Bebas Neue', sans-serif;
-            font-size: 2.8rem;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: background 0.15s, border-color 0.15s, transform 0.1s;
-            color: var(--text);
-            user-select: none;
-        }
+        .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; width: 100%; max-width: 300px; }
+        .cell { aspect-ratio: 1; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; font-family: 'Bebas Neue', sans-serif; font-size: 2.8rem; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: background 0.15s, border-color 0.15s; color: var(--text); user-select: none; }
         .cell:hover.clickable { background: var(--surface2); border-color: rgba(0,255,136,0.5); }
         .cell.x { color: var(--green); }
         .cell.o { color: var(--red); }
         .cell.win-cell { background: rgba(0,255,136,0.1); border-color: var(--green); animation: pulse-win 1s ease infinite; }
         .cell.o.win-cell { background: rgba(255,69,96,0.1); border-color: var(--red); }
-
-        @keyframes pulse-win {
-            0%, 100% { box-shadow: 0 0 0 0 transparent; }
-            50% { box-shadow: 0 0 20px var(--green-glow); }
-        }
-
-        .overlay {
-            position: fixed;
-            inset: 0;
-            background: rgba(0,0,0,0.85);
-            backdrop-filter: blur(6px);
-            z-index: 100;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-        }
-        .overlay-card {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 20px;
-            padding: 36px 28px;
-            text-align: center;
-            max-width: 340px;
-            width: 100%;
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-        }
+        @keyframes pulse-win { 0%,100%{box-shadow:0 0 0 0 transparent} 50%{box-shadow:0 0 20px var(--green-glow)} }
+        .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(6px); z-index: 100; display: flex; align-items: center; justify-content: center; padding: 20px; }
+        .overlay-card { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 36px 28px; text-align: center; max-width: 340px; width: 100%; display: flex; flex-direction: column; gap: 16px; }
         .overlay-icon { font-size: 4rem; line-height: 1; }
-        .overlay-title {
-            font-family: 'Bebas Neue', sans-serif;
-            font-size: 2.2rem;
-            letter-spacing: 4px;
-        }
-        .overlay-sub {
-            font-size: 0.7rem;
-            letter-spacing: 2px;
-            color: var(--muted);
-        }
-
-        .modal {
-            position: fixed;
-            inset: 0;
-            background: rgba(0,0,0,0.85);
-            backdrop-filter: blur(6px);
-            z-index: 100;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-        }
-        .modal-card {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 20px;
-            padding: 28px;
-            width: 100%;
-            max-width: 380px;
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-        }
-        .modal-title {
-            font-family: 'Bebas Neue', sans-serif;
-            font-size: 1.5rem;
-            letter-spacing: 3px;
-            color: var(--green);
-        }
-        .modal-note {
-            font-size: 0.65rem;
-            color: var(--gold);
-            letter-spacing: 1px;
-            background: rgba(255,215,0,0.08);
-            border: 1px solid rgba(255,215,0,0.2);
-            border-radius: 8px;
-            padding: 8px 12px;
-            text-align: center;
-        }
-
-        .searching-dots::after {
-            content: '';
-            animation: dots 1.5s infinite;
-        }
-        @keyframes dots {
-            0%   { content: ''; }
-            25%  { content: '.'; }
-            50%  { content: '..'; }
-            75%  { content: '...'; }
-        }
-
-        #toast {
-            position: fixed;
-            bottom: 24px;
-            left: 50%;
-            transform: translateX(-50%) translateY(80px);
-            background: var(--surface2);
-            border: 1px solid var(--border);
-            border-radius: 10px;
-            padding: 12px 24px;
-            font-size: 0.75rem;
-            letter-spacing: 1px;
-            z-index: 200;
-            transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1);
-            white-space: nowrap;
-        }
+        .overlay-title { font-family: 'Bebas Neue', sans-serif; font-size: 2.2rem; letter-spacing: 4px; }
+        .overlay-sub { font-size: 0.7rem; letter-spacing: 2px; color: var(--muted); }
+        .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(6px); z-index: 100; display: flex; align-items: center; justify-content: center; padding: 20px; }
+        .modal-card { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 28px; width: 100%; max-width: 400px; display: flex; flex-direction: column; gap: 16px; }
+        .modal-title { font-family: 'Bebas Neue', sans-serif; font-size: 1.5rem; letter-spacing: 3px; color: var(--green); }
+        .modal-note { font-size: 0.65rem; color: var(--gold); letter-spacing: 1px; background: rgba(255,215,0,0.08); border: 1px solid rgba(255,215,0,0.2); border-radius: 8px; padding: 8px 12px; text-align: center; }
+        .searching-dots::after { content: ''; animation: dots 1.5s infinite; }
+        @keyframes dots { 0%{content:''} 25%{content:'.'} 50%{content:'..'} 75%{content:'...'} }
+        #toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(80px); background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 24px; font-size: 0.75rem; letter-spacing: 1px; z-index: 200; transition: transform 0.3s; white-space: nowrap; }
         #toast.show { transform: translateX(-50%) translateY(0); }
         #toast.success { border-color: var(--green); color: var(--green); }
         #toast.fail { border-color: var(--red); color: var(--red); }
         #toast.warn { border-color: var(--gold); color: var(--gold); }
-
-        ::-webkit-scrollbar { width: 4px; }
-        ::-webkit-scrollbar-track { background: var(--bg); }
-        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+        .history-panel { width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+        .history-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: var(--surface2); border-bottom: 1px solid var(--border); cursor: pointer; }
+        .history-stats { display: flex; gap: 16px; font-size: 0.7rem; }
+        .stat-win { color: var(--green); } .stat-loss { color: var(--red); } .stat-draw { color: var(--gold); }
+        .history-content { max-height: 0; overflow: hidden; transition: max-height 0.3s; }
+        .history-content.open { max-height: 300px; overflow-y: auto; }
+        .history-list { padding: 8px; }
+        .history-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.65rem; }
+        .result-win { color: var(--green); } .result-loss { color: var(--red); } .result-draw { color: var(--gold); }
+        .history-amount.positive { color: var(--green); } .history-amount.negative { color: var(--red); }
+        .chip-package-card { background: var(--surface2); border: 1px solid var(--border); border-radius: 12px; padding: 16px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; transition: all 0.2s; }
+        .chip-package-card:hover { border-color: var(--gold); }
+        ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-track { background: var(--bg); } ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
     </style>
 </head>
 <body>
@@ -749,257 +108,142 @@
 <div class="screen" id="login-screen">
     <div class="logo">TicTac<span>Cash</span></div>
     <p class="tagline">Play. Win. Cash Out.</p>
-
-    <div class="demo-banner">
-        🎮 Demo Mode — Enter any Kenyan number to get KES 1,000 free play money
-    </div>
-
+    <div class="demo-banner">🎮 Demo Mode — Enter any Kenyan number to get 1,000 free chips</div>
     <div class="card">
-        <!-- Step 1: Phone Number -->
         <div id="phone-step">
-            <div class="input-group">
-                <label>Your Phone Number</label>
-                <input type="tel" id="phone-input" placeholder="2547XXXXXXXX" maxlength="15">
-            </div>
-            <br>
-            <button class="btn btn-primary" id="continue-btn">Continue</button>
+            <div class="input-group"><label>Your Phone Number</label><input type="tel" id="phone-input" placeholder="2547XXXXXXXX" maxlength="15"></div>
+            <br><button class="btn btn-primary" id="continue-btn">Continue</button>
         </div>
-        
-        <!-- Step 2: PIN Entry (Login or Register) -->
         <div id="pin-step" class="hidden">
-            <div id="pin-title" style="font-size: 0.8rem; letter-spacing: 2px; color: var(--muted); text-align: center; margin-bottom: 16px;">
-                Enter your PIN
-            </div>
-            <div class="input-group">
-                <label id="pin-label">4-Digit PIN</label>
-                <input type="password" id="pin-input" class="pin-input" placeholder="****" maxlength="4" inputmode="numeric" pattern="\d*">
-            </div>
-            <div id="confirm-pin-group" class="input-group hidden">
-                <label>Confirm PIN</label>
-                <input type="password" id="confirm-pin-input" class="pin-input" placeholder="****" maxlength="4" inputmode="numeric" pattern="\d*">
-            </div>
-            <br>
-            <button class="btn btn-primary" id="submit-pin-btn">Enter Arena</button>
-            <button class="btn btn-outline" id="back-btn" style="margin-top: 8px;">← Back</button>
-            <div class="forgot-pin-link">
-                <a id="forgot-pin-link">Forgot PIN?</a>
-            </div>
+            <div id="pin-title" style="font-size:0.8rem;letter-spacing:2px;color:var(--muted);text-align:center;margin-bottom:16px;">Enter your PIN</div>
+            <div class="input-group"><label id="pin-label">4-Digit PIN</label><input type="password" id="pin-input" class="pin-input" placeholder="****" maxlength="4" inputmode="numeric"></div>
+            <div id="confirm-pin-group" class="input-group hidden"><label>Confirm PIN</label><input type="password" id="confirm-pin-input" class="pin-input" placeholder="****" maxlength="4" inputmode="numeric"></div>
+            <br><button class="btn btn-primary" id="submit-pin-btn">Enter Arena</button>
+            <button class="btn btn-outline" id="back-btn" style="margin-top:8px;">← Back</button>
+            <div class="forgot-pin-link"><a id="forgot-pin-link">Forgot PIN?</a></div>
         </div>
     </div>
-    <p style="font-size:0.6rem;color:var(--muted);text-align:center;letter-spacing:1px;">
-        Demo mode — no real money involved
-    </p>
+    <p style="font-size:0.6rem;color:var(--muted);text-align:center;letter-spacing:1px;">Demo mode — no real money involved</p>
 </div>
 
 <!-- GAME SCREEN -->
 <div class="screen hidden" id="game-screen">
-
-    <div class="demo-banner" id="demo-banner">
-        🎮 Demo Mode — Play money only. No real deposits or withdrawals.
-    </div>
-
+    <div class="demo-banner">🎮 Demo Mode — Play money only. No real deposits or withdrawals.</div>
+    
+    <!-- Wallet Card -->
     <div class="card">
-        <div class="wallet-header">
-            <span class="wallet-label">Demo Balance</span>
-            <span class="wallet-phone" id="wallet-phone"></span>
-        </div>
-        <div id="balance">KES 0.00</div>
+        <div class="wallet-header"><span class="wallet-label">Chip Balance</span><span class="wallet-phone" id="wallet-phone"></span></div>
+        <div id="chip-balance">🪙 0</div>
         <br>
         <div style="display:flex;gap:10px;">
-            <button class="btn btn-outline" style="flex:1" id="deposit-btn">⬆ Deposit</button>
-            <button class="btn btn-outline" style="flex:1;color:var(--gold);border-color:rgba(255,215,0,0.3)" id="withdraw-btn">⬇ Withdraw</button>
+            <button class="btn btn-outline" style="flex:1" id="buy-chips-btn">🎰 Buy Chips</button>
+            <button class="btn btn-outline" style="flex:1;color:var(--gold);border-color:rgba(255,215,0,0.3)" id="transfer-btn">💸 Send Chips</button>
         </div>
     </div>
-
-    <!-- INVITE FRIEND PANEL -->
-    <div class="invite-panel" id="invite-panel">
-        <div class="invite-header" id="invite-toggle">
-            <div class="invite-title">
-                <span>👥 INVITE FRIEND</span>
-            </div>
-            <span class="invite-toggle" id="invite-toggle-icon">▼</span>
+    
+    <!-- Invite Friend Panel -->
+    <div style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:var(--surface2);border-bottom:1px solid var(--border);cursor:pointer;" id="invite-toggle">
+            <span style="font-size:0.7rem;letter-spacing:2px;color:var(--green);">👥 INVITE FRIEND</span>
+            <span id="invite-toggle-icon">▼</span>
         </div>
-        <div class="invite-content" id="invite-content">
-            <div class="invite-body" id="invite-body">
+        <div id="invite-content" style="max-height:0;overflow:hidden;transition:max-height 0.3s;">
+            <div style="padding:20px;display:flex;flex-direction:column;gap:16px;" id="invite-body">
                 <div id="invite-options">
-                    <button class="btn btn-primary" id="create-room-btn" style="margin-bottom: 12px;">
-                        🏠 Create Private Room — KES 50
-                    </button>
-                    
-                    <div class="join-room-section">
-                        <label style="font-size: 0.65rem; letter-spacing: 2px; color: var(--muted);">Join with Code</label>
-                        <div class="join-input-group">
-                            <input type="text" id="room-code-input" class="join-input" placeholder="ENTER CODE" maxlength="6" style="text-transform: uppercase;">
-                            <button class="btn btn-success" id="join-room-btn" style="width: auto; padding: 12px 20px;">Join</button>
-                        </div>
-                    </div>
+                    <button class="btn btn-primary" id="create-room-btn" style="margin-bottom:12px;">🏠 Create Private Room — 50 Chips</button>
+                    <div style="display:flex;gap:8px;"><input type="text" id="room-code-input" style="flex:1;text-transform:uppercase;text-align:center;font-size:1.2rem;letter-spacing:4px;" placeholder="ENTER CODE" maxlength="6"><button class="btn btn-success" id="join-room-btn" style="width:auto;padding:12px 20px;">Join</button></div>
                 </div>
-                
                 <div id="room-created-view" class="hidden">
-                    <div class="room-code-display">
-                        <div class="room-code-label">Share this code</div>
-                        <div class="room-code" id="display-room-code">ABC123</div>
-                        <div class="invite-link-container">
-                            <input type="text" id="invite-link" class="invite-link-input" readonly>
-                            <button class="btn btn-outline btn-small" id="copy-code-btn" style="width: auto;">📋 Copy</button>
-                        </div>
-                        <div class="share-buttons">
-                            <button class="share-btn" id="share-whatsapp">
-                                <span>📱</span> WhatsApp
-                            </button>
-                            <button class="share-btn" id="share-sms">
-                                <span>💬</span> SMS
-                            </button>
-                            <button class="share-btn" id="share-clipboard">
-                                <span>🔗</span> Copy Link
-                            </button>
+                    <div style="background:var(--surface2);border:1px solid var(--green-glow);border-radius:12px;padding:20px;text-align:center;">
+                        <div style="font-size:0.6rem;letter-spacing:3px;color:var(--muted);margin-bottom:8px;">Share this code</div>
+                        <div id="display-room-code" style="font-family:'Bebas Neue',sans-serif;font-size:3.5rem;letter-spacing:8px;color:var(--green);">ABC123</div>
+                        <div style="display:flex;gap:8px;margin-top:12px;"><input type="text" id="invite-link" style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;color:var(--text);font-size:0.7rem;text-align:center;" readonly><button class="btn btn-outline btn-small" id="copy-code-btn" style="width:auto;">📋 Copy</button></div>
+                        <div style="display:flex;gap:8px;justify-content:center;margin-top:12px;">
+                            <button class="btn btn-outline btn-small" id="share-whatsapp">📱 WhatsApp</button>
+                            <button class="btn btn-outline btn-small" id="share-sms">💬 SMS</button>
+                            <button class="btn btn-outline btn-small" id="share-clipboard">🔗 Copy Link</button>
                         </div>
                     </div>
-                    
-                    <div class="waiting-room">
-                        <div class="waiting-animation">⏳</div>
-                        <div class="waiting-text">Waiting for opponent to join...</div>
-                    </div>
-                    
+                    <div style="text-align:center;padding:20px;"><div style="font-size:2rem;">⏳</div><div style="font-size:0.8rem;color:var(--muted);">Waiting for opponent to join...</div></div>
                     <button class="btn btn-danger" id="cancel-room-btn">Cancel Room</button>
                 </div>
             </div>
         </div>
     </div>
-
-    <!-- GAME HISTORY PANEL -->
+    
+    <!-- Game History Panel -->
     <div class="history-panel">
         <div class="history-header" id="history-toggle">
-            <div class="history-title">
-                <span>📋 GAME HISTORY</span>
-                <span class="history-stats">
-                    <span class="stat-win" id="stat-wins">0W</span>
-                    <span class="stat-loss" id="stat-losses">0L</span>
-                    <span class="stat-draw" id="stat-draws">0D</span>
-                </span>
-            </div>
-            <span class="history-toggle" id="history-toggle-icon">▼</span>
+            <span style="font-size:0.7rem;letter-spacing:2px;color:var(--muted);">📋 GAME HISTORY</span>
+            <span class="history-stats"><span class="stat-win" id="stat-wins">0W</span><span class="stat-loss" id="stat-losses">0L</span><span class="stat-draw" id="stat-draws">0D</span></span>
         </div>
         <div class="history-content" id="history-content">
-            <div class="history-list" id="history-list">
-                <div class="empty-history">No games played yet</div>
-            </div>
-            <button class="clear-history-btn" id="clear-history">Clear History</button>
+            <div class="history-list" id="history-list"><div style="text-align:center;padding:20px;color:var(--muted);font-size:0.65rem;">No games played yet</div></div>
+            <button class="btn btn-outline btn-small" id="clear-history" style="margin:8px;">Clear History</button>
         </div>
     </div>
-
+    
     <div id="status">Ready to play</div>
-
+    
+    <!-- Game Board -->
     <div class="board-wrap hidden" id="board-wrap">
         <div class="turn-indicators">
-            <div class="player-indicator x-side" id="indicator-x">
-                <span class="symbol">X</span>
-                <span id="indicator-x-label">YOU</span>
-            </div>
-            <div style="display:flex;align-items:center;font-size:0.6rem;color:var(--muted);letter-spacing:2px;">VS</div>
-            <div class="player-indicator o-side" id="indicator-o">
-                <span id="indicator-o-label">OPP</span>
-                <span class="symbol">O</span>
-            </div>
+            <div class="player-indicator x-side" id="indicator-x"><span class="symbol">X</span><span id="indicator-x-label">YOU</span></div>
+            <div style="color:var(--muted);font-size:0.6rem;">VS</div>
+            <div class="player-indicator o-side" id="indicator-o"><span id="indicator-o-label">OPP</span><span class="symbol">O</span></div>
         </div>
         <div class="grid" id="board"></div>
     </div>
-
-    <div id="online-bar" style="width:100%;display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;font-size:0.65rem;letter-spacing:2px;color:var(--muted);">
+    
+    <div style="width:100%;display:flex;justify-content:space-between;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;font-size:0.65rem;color:var(--muted);">
         <span>🟢 <span id="online-count">0</span> ONLINE</span>
         <span>🔍 <span id="searching-count">0</span> SEARCHING</span>
     </div>
-
-    <button class="btn btn-primary" id="play-btn">
-        Search for Match — KES 50
-    </button>
-    <button class="btn btn-danger hidden" id="cancel-btn"
-        style="border-color:rgba(255,69,96,0.5);color:var(--red);">
-        ✕ Cancel Search
-    </button>
-
+    
+    <button class="btn btn-primary" id="play-btn">Search for Match — 50 Chips</button>
+    <button class="btn btn-danger hidden" id="cancel-btn">✕ Cancel Search</button>
     <button class="btn btn-danger" id="logout-btn">Disconnect</button>
 </div>
 
-<!-- WITHDRAW MODAL -->
-<div class="modal hidden" id="withdraw-modal">
+<!-- BUY CHIPS MODAL -->
+<div class="modal hidden" id="buy-chips-modal">
     <div class="modal-card">
-        <div class="modal-title" style="color:var(--gold)">Withdraw Funds</div>
-        <div class="modal-note">
-            🎮 Demo mode — withdrawals are disabled. This is play money only!
+        <div class="modal-title" style="color:var(--gold);">🎰 Buy Chips</div>
+        <div id="chip-packages" style="display:flex;flex-direction:column;gap:10px;">
+            <div class="chip-package-card" onclick="selectPackage(100,100,0)"><div><div style="font-size:1.3rem;color:var(--green);">🪙 100 Chips</div><div style="font-size:0.7rem;color:var(--muted);">KES 100</div></div></div>
+            <div class="chip-package-card" onclick="selectPackage(550,500,50)" style="border:1px solid var(--gold);"><div><div style="font-size:1.3rem;color:var(--green);">🪙 550 Chips</div><div style="font-size:0.7rem;color:var(--muted);">KES 500</div><div style="font-size:0.6rem;color:var(--gold);">+50 BONUS!</div></div><div style="color:var(--gold);font-size:0.7rem;">BEST VALUE</div></div>
+            <div class="chip-package-card" onclick="selectPackage(1200,1000,200)"><div><div style="font-size:1.3rem;color:var(--green);">🪙 1,200 Chips</div><div style="font-size:0.7rem;color:var(--muted);">KES 1,000</div><div style="font-size:0.6rem;color:var(--gold);">+200 BONUS!</div></div></div>
         </div>
-        <div class="input-group">
-            <label>Amount (KES)</label>
-            <input type="number" id="withdraw-amount" placeholder="Min KES 10" min="10">
+        <div id="payment-instructions" style="display:none;">
+            <div class="modal-note" style="background:rgba(0,255,136,0.1);border-color:var(--green);"><div style="font-size:0.8rem;">📱 Send M-Pesa to:</div><div style="font-size:1.5rem;font-weight:bold;color:var(--green);">254712345678</div><div style="font-size:0.7rem;">Amount: <span id="mpesa-amount" style="color:var(--gold);">KES 100</span></div></div>
+            <div class="input-group"><label>M-Pesa Transaction Code</label><input type="text" id="mpesa-code" placeholder="e.g., ABC123XYZ" style="text-transform:uppercase;"></div>
+            <button class="btn btn-primary" id="verify-payment-btn" style="background:var(--gold);color:#000;">✅ Verify Payment</button>
+            <div id="verification-status" style="text-align:center;margin-top:12px;display:none;"></div>
         </div>
-        <div id="withdraw-balance-hint" style="font-size:0.65rem;color:var(--muted);letter-spacing:1px;text-align:right;margin-top:-8px;"></div>
-        <button class="btn btn-primary" style="background:var(--gold);color:#000" id="submit-withdraw">Withdraw to M-Pesa</button>
-        <button class="btn btn-outline" id="cancel-withdraw">Cancel</button>
+        <button class="btn btn-outline" id="close-chip-modal">Cancel</button>
     </div>
 </div>
 
-<!-- DEPOSIT MODAL -->
-<div class="modal hidden" id="deposit-modal">
+<!-- TRANSFER CHIPS MODAL -->
+<div class="modal hidden" id="transfer-modal">
     <div class="modal-card">
-        <div class="modal-title">Deposit Funds</div>
-        <div class="modal-note">
-            🎮 Demo mode — deposits are disabled. Use your free KES 1,000 demo balance!
-        </div>
-        <div class="input-group">
-            <label>Amount (KES)</label>
-            <input type="number" id="deposit-amount" placeholder="e.g. 100" min="10" max="100000">
-        </div>
-        <button class="btn btn-primary" id="submit-deposit">Send STK Push</button>
-        <button class="btn btn-outline" id="cancel-deposit">Cancel</button>
+        <div class="modal-title" style="color:var(--gold);">💸 Send Chips</div>
+        <div class="input-group"><label>Recipient Phone</label><input type="tel" id="transfer-phone" placeholder="2547XXXXXXXX" maxlength="15"></div>
+        <div class="input-group"><label>Amount (Chips)</label><input type="number" id="transfer-amount" placeholder="Min 10 chips" min="10" max="10000"></div>
+        <div class="input-group"><label>Your PIN</label><input type="password" id="transfer-pin" class="pin-input" placeholder="****" maxlength="4"></div>
+        <div class="modal-note">Fee: <span style="color:var(--gold);">2%</span> (min 1 chip)</div>
+        <button class="btn btn-primary" id="send-transfer-btn" style="background:var(--gold);color:#000;">💸 Send Chips</button>
+        <button class="btn btn-outline" id="close-transfer-modal">Cancel</button>
     </div>
 </div>
 
 <!-- RESET PIN MODAL -->
 <div class="modal hidden" id="reset-pin-modal">
     <div class="modal-card">
-        <div class="modal-title" style="color: var(--gold)">Reset PIN</div>
-        
-        <!-- Step 1: Request Code -->
-        <div id="reset-step-1">
-            <div class="modal-note">
-                Enter your phone number to receive a reset code.
-            </div>
-            <div class="input-group">
-                <label>Phone Number</label>
-                <input type="tel" id="reset-phone-input" placeholder="2547XXXXXXXX" maxlength="15">
-            </div>
-            <button class="btn btn-primary" id="request-reset-btn" style="background: var(--gold); color: #000;">Send Reset Code</button>
-        </div>
-        
-        <!-- Step 2: Enter Code -->
-        <div id="reset-step-2" class="hidden">
-            <div class="modal-note" style="color: var(--green);">
-                Code sent to <span id="reset-phone-display"></span>
-            </div>
-            <div class="input-group">
-                <label>6-Digit Code</label>
-                <input type="text" id="reset-code-input" class="pin-input" placeholder="000000" maxlength="6" inputmode="numeric" style="font-size: 1.5rem !important;">
-            </div>
-            <button class="btn btn-primary" id="verify-code-btn" style="background: var(--gold); color: #000;">Verify Code</button>
-            <button class="btn btn-outline" id="back-to-request-btn" style="margin-top: 8px;">← Back</button>
-        </div>
-        
-        <!-- Step 3: Set New PIN -->
-        <div id="reset-step-3" class="hidden">
-            <div class="modal-note" style="color: var(--green);">
-                Code verified! Set your new PIN.
-            </div>
-            <div class="input-group">
-                <label>New 4-Digit PIN</label>
-                <input type="password" id="new-pin-input" class="pin-input" placeholder="****" maxlength="4" inputmode="numeric">
-            </div>
-            <div class="input-group">
-                <label>Confirm New PIN</label>
-                <input type="password" id="confirm-new-pin-input" class="pin-input" placeholder="****" maxlength="4" inputmode="numeric">
-            </div>
-            <button class="btn btn-primary" id="set-new-pin-btn" style="background: var(--gold); color: #000;">Reset PIN</button>
-        </div>
-        
+        <div class="modal-title" style="color:var(--gold);">Reset PIN</div>
+        <div id="reset-step-1"><div class="modal-note">Enter your phone number to receive a reset code.</div><div class="input-group"><label>Phone Number</label><input type="tel" id="reset-phone-input" placeholder="2547XXXXXXXX"></div><button class="btn btn-primary" id="request-reset-btn" style="background:var(--gold);color:#000;">Send Reset Code</button></div>
+        <div id="reset-step-2" class="hidden"><div class="modal-note" style="color:var(--green);">Code sent to <span id="reset-phone-display"></span></div><div class="input-group"><label>6-Digit Code</label><input type="text" id="reset-code-input" class="pin-input" placeholder="000000" maxlength="6" style="font-size:1.5rem!important;"></div><button class="btn btn-primary" id="verify-code-btn" style="background:var(--gold);color:#000;">Verify Code</button><button class="btn btn-outline" id="back-to-request-btn">← Back</button></div>
+        <div id="reset-step-3" class="hidden"><div class="modal-note" style="color:var(--green);">Code verified! Set your new PIN.</div><div class="input-group"><label>New 4-Digit PIN</label><input type="password" id="new-pin-input" class="pin-input" placeholder="****" maxlength="4"></div><div class="input-group"><label>Confirm New PIN</label><input type="password" id="confirm-new-pin-input" class="pin-input" placeholder="****" maxlength="4"></div><button class="btn btn-primary" id="set-new-pin-btn" style="background:var(--gold);color:#000;">Reset PIN</button></div>
         <button class="btn btn-outline" id="close-reset-modal">Cancel</button>
     </div>
 </div>
@@ -1014,948 +258,272 @@
     </div>
 </div>
 
-<!-- TOAST -->
 <div id="toast"></div>
 
 <script>
-    (function() {
-        // --- STATE ---
-        let socket;
-        let myPhone = null;
-        let gameId = null;
-        let mySymbol = null;
-        let currentTurn = 'X';
-        let board = Array(9).fill(null);
-        let gameActive = false;
-        let authCompleted = false;
+(function() {
+    let socket, myPhone = null, gameId = null, mySymbol = null, currentTurn = 'X', board = Array(9).fill(null), gameActive = false, authCompleted = false;
+    let isRegistering = false, checkedPhone = null, resetToken = null, verifyToken = null;
+    let gameHistory = [], currentRoomCode = null, waitingForOpponent = false, pendingRoomJoin = null;
+    let selectedPackage = null, myChips = 0;
+    const BASE_URL = window.location.origin, $ = id => document.getElementById(id);
+    
+    function checkUrlForRoom() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const roomCode = urlParams.get('room');
+        if (roomCode) { pendingRoomJoin = roomCode.toUpperCase(); }
+    }
+    checkUrlForRoom();
+    
+    // Login functions
+    function showPhoneStep() { $('phone-step').classList.remove('hidden'); $('pin-step').classList.add('hidden'); }
+    function showPinStep() { $('phone-step').classList.add('hidden'); $('pin-step').classList.remove('hidden'); }
+    function checkUserAndProceed() {
+        const raw = $('phone-input').value.trim();
+        if (!raw) return showToast('Enter your phone number', 'fail');
+        checkedPhone = raw;
+        socket.emit('check_user', { phone: raw });
+    }
+    function submitPin() {
+        const pin = $('pin-input').value.trim();
+        if (!pin || pin.length !== 4 || !/^\d+$/.test(pin)) return showToast('Enter a 4-digit PIN', 'fail');
+        if (isRegistering) {
+            const confirmPin = $('confirm-pin-input').value.trim();
+            if (pin !== confirmPin) return showToast('PINs do not match', 'fail');
+            socket.emit('register', { phone: checkedPhone, pin });
+        } else {
+            socket.emit('auth', { phone: checkedPhone, pin });
+        }
+    }
+    
+    // PIN Reset
+    function showResetModal() { $('reset-pin-modal').classList.remove('hidden'); $('reset-phone-input').value = $('phone-input').value || ''; }
+    function hideResetModal() { $('reset-pin-modal').classList.add('hidden'); }
+    async function requestResetCode() {
+        const phone = $('reset-phone-input').value.trim();
+        if (!phone) return showToast('Enter your phone number', 'fail');
+        const res = await fetch('/api/reset-pin/request', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone}) });
+        const data = await res.json();
+        if (res.ok) {
+            resetToken = data.token; $('reset-phone-display').textContent = phone;
+            if (data.demoCode) { $('reset-code-input').value = data.demoCode; showToast(`Demo code: ${data.demoCode}`, 'success'); }
+            $('reset-step-1').classList.add('hidden'); $('reset-step-2').classList.remove('hidden');
+        } else showToast(data.error, 'fail');
+    }
+    async function verifyResetCode() {
+        const code = $('reset-code-input').value.trim();
+        if (!code || code.length !== 6) return showToast('Enter the 6-digit code', 'fail');
+        const res = await fetch('/api/reset-pin/verify', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({token:resetToken,code}) });
+        const data = await res.json();
+        if (res.ok) { verifyToken = data.verifyToken; $('reset-step-2').classList.add('hidden'); $('reset-step-3').classList.remove('hidden'); }
+        else showToast(data.error, 'fail');
+    }
+    async function setNewPin() {
+        const newPin = $('new-pin-input').value.trim(), confirmPin = $('confirm-new-pin-input').value.trim();
+        if (!newPin || newPin.length !== 4 || newPin !== confirmPin) return showToast('PINs must match', 'fail');
+        const res = await fetch('/api/reset-pin/set', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({token:resetToken,verifyToken,newPin}) });
+        const data = await res.json();
+        if (res.ok) { showToast('PIN reset successful!', 'success'); hideResetModal(); $('phone-input').value = $('reset-phone-input').value; showPhoneStep(); }
+        else showToast(data.error, 'fail');
+    }
+    
+    // Chip functions
+    function showChipStore() { $('buy-chips-modal').classList.remove('hidden'); }
+    function hideChipStore() { $('buy-chips-modal').classList.add('hidden'); }
+    function selectPackage(chips, price, bonus) {
+        selectedPackage = { chips, price, bonus };
+        document.querySelectorAll('.chip-package-card').forEach(c => c.style.border = '1px solid var(--border)');
+        event.currentTarget.style.border = '2px solid var(--green)';
+        $('chip-packages').style.display = 'none'; $('payment-instructions').style.display = 'block';
+        $('mpesa-amount').textContent = `KES ${price}`;
+    }
+    async function verifyPayment() {
+        const mpesaCode = $('mpesa-code').value.trim().toUpperCase();
+        if (!mpesaCode || !selectedPackage) return showToast('Enter M-Pesa code', 'fail');
+        const statusDiv = $('verification-status'); statusDiv.style.display = 'block';
+        statusDiv.innerHTML = '<div style="color:var(--gold);">⏳ Verifying...</div>';
+        const res = await fetch('/api/chips/verify-payment', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:myPhone,mpesaCode,chips:selectedPackage.chips,amount:selectedPackage.price,bonus:selectedPackage.bonus}) });
+        const data = await res.json();
+        if (res.ok) {
+            statusDiv.innerHTML = `<div style="color:var(--green);">✅ Payment Verified!</div><div style="color:var(--gold);">🪙 ${data.chips} chips added!</div>`;
+            updateChipDisplay(data.newBalance);
+            setTimeout(() => { hideChipStore(); showToast(`✅ ${data.chips} chips credited!`, 'success'); }, 2000);
+        } else statusDiv.innerHTML = `<div style="color:var(--red);">❌ ${data.error}</div>`;
+    }
+    
+    // Transfer functions
+    function showTransferModal() { $('transfer-modal').classList.remove('hidden'); }
+    function hideTransferModal() { $('transfer-modal').classList.add('hidden'); }
+    function sendChips() {
+        const phone = $('transfer-phone').value.trim(), amount = parseInt($('transfer-amount').value), pin = $('transfer-pin').value.trim();
+        if (!phone || !amount || amount < 10 || !pin || pin.length !== 4) return showToast('Fill all fields correctly', 'fail');
+        socket.emit('transfer_chips', { recipientPhone: phone, amount, pin });
+        $('send-transfer-btn').disabled = true;
+    }
+    
+    // Invite functions
+    function generateInviteLink(code) { return `${BASE_URL}?room=${code}`; }
+    function copyToClipboard(text) { navigator.clipboard.writeText(text).then(()=>showToast('Copied!','success')).catch(()=>showToast('Copy failed','fail')); }
+    function shareWhatsApp(text) { window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank'); }
+    function shareSMS(text) { window.open(`sms:?body=${encodeURIComponent(text)}`, '_blank'); }
+    function createPrivateRoom() { if(!myPhone)return showToast('Not authenticated','fail'); socket.emit('create_private_room'); }
+    function joinPrivateRoom(code) { const c = code || $('room-code-input').value.trim().toUpperCase(); if(!c||c.length<4)return showToast('Enter room code','fail'); socket.emit('join_private_room',{roomCode:c}); }
+    function cancelPrivateRoom() { socket.emit('cancel_private_room'); }
+    
+    // History functions
+    function loadHistory() { try { const stored = localStorage.getItem('tictac_history'); if(stored) gameHistory = JSON.parse(stored); } catch(e){} updateHistoryDisplay(); }
+    function saveHistory() { try { localStorage.setItem('tictac_history', JSON.stringify(gameHistory)); } catch(e){} updateHistoryDisplay(); }
+    function addGameToHistory(result, amount) {
+        gameHistory.unshift({ id: Date.now()+'-'+Math.random().toString(36).substr(2,6), timestamp: new Date().toISOString(), result, amount });
+        if(gameHistory.length > 50) gameHistory = gameHistory.slice(0, 50);
+        saveHistory();
+    }
+    function clearHistory() { gameHistory = []; saveHistory(); showToast('History cleared',''); }
+    function updateHistoryDisplay() {
+        const wins = gameHistory.filter(g=>g.result==='win').length, losses = gameHistory.filter(g=>g.result==='loss').length, draws = gameHistory.filter(g=>g.result==='draw').length;
+        $('stat-wins').textContent = `${wins}W`; $('stat-losses').textContent = `${losses}L`; $('stat-draws').textContent = `${draws}D`;
+        if(gameHistory.length===0) { $('history-list').innerHTML='<div style="text-align:center;padding:20px;color:var(--muted);font-size:0.65rem;">No games played yet</div>'; return; }
+        $('history-list').innerHTML = gameHistory.slice(0,10).map(g=>{
+            const time = new Date(g.timestamp).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+            const date = new Date(g.timestamp).toLocaleDateString([],{month:'short',day:'numeric'});
+            let icon, rc, ac, at;
+            if(g.result==='win'){icon='🏆';rc='result-win';ac='positive';at=`+${g.amount} 🪙`;}
+            else if(g.result==='loss'){icon='❌';rc='result-loss';ac='negative';at=`-50 🪙`;}
+            else{icon='🤝';rc='result-draw';ac='';at=`${g.amount} 🪙`;}
+            return `<div class="history-item"><span class="${rc}">${icon} ${g.result.toUpperCase()}</span><span style="color:var(--muted);font-size:0.55rem;">${date} ${time}</span><span class="history-amount ${ac}">${at}</span></div>`;
+        }).join('');
+    }
+    
+    // Game functions
+    function initBoard() {
+        $('board').innerHTML = '';
+        for(let i=0;i<9;i++){const c=document.createElement('div');c.className='cell';c.dataset.index=i;c.addEventListener('click',()=>makeMove(i));$('board').appendChild(c);}
+    }
+    function makeMove(index) {
+        if(!gameActive||currentTurn!==mySymbol||board[index])return;
+        socket.emit('make_move',{gameId,index});
+    }
+    function applyMove(index, symbol) {
+        board[index]=symbol;const cell=$('board').children[index];
+        cell.textContent=symbol;cell.className=`cell ${symbol.toLowerCase()}`;cell.classList.remove('clickable');
+    }
+    function updateTurnIndicators() {
+        $('indicator-x').classList.toggle('active-turn',currentTurn==='X');
+        $('indicator-o').classList.toggle('active-turn',currentTurn==='O');
+        if(!gameActive)return;
+        if(currentTurn===mySymbol){setStatus('Your turn','active');[...$('board').children].forEach((c,i)=>{if(!board[i])c.classList.add('clickable');});}
+        else{setStatus("Opponent's turn...",'');[...$('board').children].forEach(c=>c.classList.remove('clickable'));}
+    }
+    function highlightWinCells(symbol){const w=[[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];const b=[...$('board').children].map(c=>c.textContent||null);for(const[a,bc,c]of w){if(b[a]===symbol&&b[bc]===symbol&&b[c]===symbol)[a,bc,c].forEach(i=>$('board').children[i].classList.add('win-cell'));}}
+    function showResult(icon,title,sub){$('result-icon').textContent=icon;$('result-title').textContent=title;$('result-sub').textContent=sub;$('result-overlay').classList.remove('hidden');}
+    function dismissResult(){$('result-overlay').classList.add('hidden');resetGameState();}
+    function resetGameState(){gameId=null;mySymbol=null;gameActive=false;board=Array(9).fill(null);currentTurn='X';initBoard();$('board-wrap').classList.add('hidden');$('play-btn').classList.remove('hidden');$('play-btn').disabled=false;$('cancel-btn').classList.add('hidden');$('indicator-x').classList.remove('active-turn');$('indicator-o').classList.remove('active-turn');setStatus('Ready to play','');}
+    function setStatus(msg,type='',searching=false){$('status').className=type?`active ${type}`:'';$('status').innerHTML=searching?`<span class="searching-dots">${msg}</span>`:msg;}
+    function updateChipDisplay(balance){myChips=balance;$('chip-balance').textContent=`🪙 ${balance}`;$('chip-balance').style.transform='scale(1.1)';setTimeout(()=>$('chip-balance').style.transform='scale(1)',200);}
+    function showToast(msg,type=''){const t=$('toast');t.textContent=msg;t.className=`show ${type}`;clearTimeout(window._toastTimer);window._toastTimer=setTimeout(()=>{t.className='';},3500);}
+    function logout(){socket.disconnect();myPhone=null;gameActive=false;authCompleted=false;$('game-screen').classList.add('hidden');$('login-screen').classList.remove('hidden');setTimeout(()=>initSocket(),100);}
+    function findMatch(){if(!myPhone)return showToast('Not authenticated','fail');if(!socket?.connected){socket.connect();return showToast('Reconnecting...','warn');}$('play-btn').disabled=true;setStatus('Searching for opponent','active',true);socket.emit('find_match');}
+    function cancelSearch(){socket.emit('cancel_search');}
+    function toggleInvite(){$('invite-content').style.maxHeight=$('invite-content').style.maxHeight==='0px'?'500px':'0px';$('invite-toggle-icon').textContent=$('invite-content').style.maxHeight==='500px'?'▲':'▼';}
+    function toggleHistory(){$('history-content').classList.toggle('open');}
+    
+    // Socket initialization
+    function initSocket() {
+        if(socket){socket.removeAllListeners();socket.disconnect();}
+        socket = io({transports:['websocket','polling'],reconnection:true,reconnectionAttempts:10,reconnectionDelay:1000});
         
-        // Login/Register state
-        let isRegistering = false;
-        let checkedPhone = null;
-        
-        // PIN Reset state
-        let resetToken = null;
-        let verifyToken = null;
-        let resetPhone = null;
-        
-        // Game history storage
-        let gameHistory = [];
-        const HISTORY_STORAGE_KEY = 'tictac_history';
-        
-        // Invite system variables
-        let currentRoomCode = null;
-        let waitingForOpponent = false;
-        let pendingRoomJoin = null;
-        const BASE_URL = window.location.origin;
-
-        // --- DOM ELEMENTS ---
-        const $ = id => document.getElementById(id);
-        const loginScreen = $('login-screen');
-        const gameScreen  = $('game-screen');
-        const boardWrap   = $('board-wrap');
-        const playBtn     = $('play-btn');
-        const cancelBtn   = $('cancel-btn');
-        const statusEl    = $('status');
-        const balanceEl   = $('balance');
-        const boardEl     = $('board');
-        const overlayEl   = $('result-overlay');
-
-        // --- CHECK URL FOR ROOM CODE ON LOAD ---
-        function checkUrlForRoom() {
-            const urlParams = new URLSearchParams(window.location.search);
-            const roomCode = urlParams.get('room');
-            if (roomCode) {
-                pendingRoomJoin = roomCode.toUpperCase();
-                console.log('📋 Found room code in URL:', pendingRoomJoin);
+        socket.on('connect',()=>{if(myPhone&&!authCompleted)socket.emit('auth',{phone:myPhone,pin:sessionStorage.getItem('pin')});});
+        socket.on('disconnect',()=>{authCompleted=false;if(gameActive)showToast('Connection lost','warn');});
+        socket.on('user_check_result',({exists,phone})=>{isRegistering=!exists;checkedPhone=phone;showPinStep();
+            if(isRegistering){$('pin-title').textContent='Create a 4-Digit PIN';$('pin-label').textContent='Choose PIN';$('confirm-pin-group').classList.remove('hidden');$('submit-pin-btn').textContent='Create Account';}
+            else{$('pin-title').textContent='Welcome back! Enter your PIN';$('pin-label').textContent='Your PIN';$('confirm-pin-group').classList.add('hidden');$('submit-pin-btn').textContent='Enter Arena';}
+        });
+        socket.on('registration_success',({phone})=>{myPhone=phone;showToast('Account created! Please login.','success');setTimeout(()=>{showPhoneStep();$('phone-input').value=phone;},1500);});
+        socket.on('auth_success',({chips})=>{authCompleted=true;myPhone=checkedPhone;$('wallet-phone').textContent=myPhone;updateChipDisplay(chips);$('login-screen').classList.add('hidden');$('game-screen').classList.remove('hidden');setStatus('Ready to play','');loadHistory();showPhoneStep();
+            if(pendingRoomJoin){$('room-code-input').value=pendingRoomJoin;setTimeout(()=>{toggleInvite();joinPrivateRoom(pendingRoomJoin);pendingRoomJoin=null;},500);}
+        });
+        socket.on('balance_update',({chips})=>{updateChipDisplay(chips);});
+        socket.on('online_count',({online,searching})=>{$('online-count').textContent=online;$('searching-count').textContent=searching;});
+        socket.on('waiting',()=>{setStatus('Searching for opponent','active',true);$('play-btn').classList.add('hidden');$('cancel-btn').classList.remove('hidden');});
+        socket.on('search_cancelled',()=>{setStatus('Ready to play','');$('play-btn').disabled=false;$('play-btn').classList.remove('hidden');$('cancel-btn').classList.add('hidden');showToast('Search cancelled','warn');});
+        socket.on('demo_bonus',({chips})=>{updateChipDisplay(chips);showToast(`🎉 ${chips} free chips added!`,'success');});
+        socket.on('match_found',({gameId:gId,playerX,playerO})=>{
+            gameId=gId;mySymbol=(socket.id===playerX)?'X':'O';currentTurn='X';board=Array(9).fill(null);gameActive=true;
+            if(mySymbol==='X'){$('indicator-x-label').textContent='YOU';$('indicator-o-label').textContent='OPP';}
+            else{$('indicator-x-label').textContent='OPP';$('indicator-o-label').textContent='YOU';}
+            initBoard();$('board-wrap').classList.remove('hidden');$('play-btn').classList.add('hidden');$('cancel-btn').classList.add('hidden');updateTurnIndicators();showToast('Match found!','success');
+        });
+        socket.on('private_match_found',({gameId:gId,mySymbol:symbol,opponent})=>{
+            gameId=gId;mySymbol=symbol;currentTurn='X';board=Array(9).fill(null);gameActive=true;
+            $('invite-options').classList.remove('hidden');$('room-created-view').classList.add('hidden');currentRoomCode=null;waitingForOpponent=false;
+            toggleInvite();
+            if(mySymbol==='X'){$('indicator-x-label').textContent='YOU';$('indicator-o-label').textContent='OPP';}
+            else{$('indicator-x-label').textContent='OPP';$('indicator-o-label').textContent='YOU';}
+            initBoard();$('board-wrap').classList.remove('hidden');$('play-btn').classList.add('hidden');$('cancel-btn').classList.add('hidden');updateTurnIndicators();showToast(`Game starting!`,'success');
+        });
+        socket.on('room_created',({roomCode,chips})=>{currentRoomCode=roomCode;waitingForOpponent=true;$('invite-options').classList.add('hidden');$('room-created-view').classList.remove('hidden');$('display-room-code').textContent=roomCode;$('invite-link').value=generateInviteLink(roomCode);updateChipDisplay(chips);showToast(`Room created! Code: ${roomCode}`,'success');});
+        socket.on('room_error',({error})=>{showToast(error,'fail');});
+        socket.on('room_cancelled',()=>{toggleInvite();setStatus('Ready to play','');showToast('Room cancelled','warn');});
+        socket.on('move_made',({index,symbol,nextTurn})=>{applyMove(index,symbol);currentTurn=nextTurn;updateTurnIndicators();});
+        socket.on('game_finished',({result,winner,winnerSocketId,prize,refund})=>{
+            gameActive=false;[...$('board').children].forEach(c=>c.classList.remove('clickable'));
+            if(result==='DRAW'){showResult('🤝','DRAW',`${refund} chips refunded`);setStatus('Draw','warn');addGameToHistory('draw',refund);}
+            else if(result==='FORFEIT'){showResult('🏆','VICTORY',`Opponent disconnected — ${prize} chips won`);setStatus('Victory!','active');addGameToHistory('win',prize);}
+            else{const iWon=winnerSocketId===socket.id;
+                if(iWon){highlightWinCells(winner);showResult('💰','VICTORY!',`${prize} chips won`);setStatus('You won!','active');addGameToHistory('win',prize);}
+                else{highlightWinCells(winner);showResult('❌','DEFEAT','Better luck next time');setStatus('You lost','error');addGameToHistory('loss',50);}
             }
-        }
-        checkUrlForRoom();
-
-        // --- LOGIN/REGISTER FUNCTIONS ---
-        function showPhoneStep() {
-            $('phone-step').classList.remove('hidden');
-            $('pin-step').classList.add('hidden');
-            $('pin-input').value = '';
-            $('confirm-pin-input').value = '';
-        }
-
-        function showPinStep() {
-            $('phone-step').classList.add('hidden');
-            $('pin-step').classList.remove('hidden');
-        }
-
-        function checkUserAndProceed() {
-            const raw = $('phone-input').value.trim();
-            if (!raw) return showToast('Enter your phone number', 'fail');
-            
-            checkedPhone = raw;
-            socket.emit('check_user', { phone: raw });
-            showToast('Checking...', '');
-        }
-
-        function submitPin() {
-            const pin = $('pin-input').value.trim();
-            if (!pin || pin.length !== 4) return showToast('Enter a 4-digit PIN', 'fail');
-            if (!/^\d+$/.test(pin)) return showToast('PIN must be numbers only', 'fail');
-            
-            if (isRegistering) {
-                const confirmPin = $('confirm-pin-input').value.trim();
-                if (pin !== confirmPin) return showToast('PINs do not match', 'fail');
-                socket.emit('register', { phone: checkedPhone, pin });
-                showToast('Creating account...', '');
-            } else {
-                socket.emit('auth', { phone: checkedPhone, pin });
-                showToast('Logging in...', '');
-            }
-        }
-
-        // --- PIN RESET FUNCTIONS ---
-        function showResetModal() {
-            $('reset-pin-modal').classList.remove('hidden');
-            $('reset-step-1').classList.remove('hidden');
-            $('reset-step-2').classList.add('hidden');
-            $('reset-step-3').classList.add('hidden');
-            $('reset-phone-input').value = $('phone-input').value || '';
-            resetToken = null;
-            verifyToken = null;
-        }
-
-        function hideResetModal() {
-            $('reset-pin-modal').classList.add('hidden');
-        }
-
-        async function requestResetCode() {
-            const phone = $('reset-phone-input').value.trim();
-            if (!phone) return showToast('Enter your phone number', 'fail');
-            
-            showToast('Sending reset code...', '');
-            
-            try {
-                const res = await fetch('/api/reset-pin/request', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ phone })
-                });
-                
-                const data = await res.json();
-                
-                if (res.ok) {
-                    resetToken = data.token;
-                    resetPhone = phone;
-                    $('reset-phone-display').textContent = phone;
-                    
-                    if (data.demoCode) {
-                        showToast(`Demo code: ${data.demoCode}`, 'success');
-                        $('reset-code-input').value = data.demoCode;
-                    } else {
-                        showToast('Reset code sent to your phone!', 'success');
-                    }
-                    
-                    $('reset-step-1').classList.add('hidden');
-                    $('reset-step-2').classList.remove('hidden');
-                } else {
-                    showToast(data.error || 'Failed to send code', 'fail');
-                }
-            } catch (e) {
-                showToast('Network error. Try again.', 'fail');
-            }
-        }
-
-        async function verifyResetCode() {
-            const code = $('reset-code-input').value.trim();
-            if (!code || code.length !== 6) return showToast('Enter the 6-digit code', 'fail');
-            
-            try {
-                const res = await fetch('/api/reset-pin/verify', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ token: resetToken, code })
-                });
-                
-                const data = await res.json();
-                
-                if (res.ok) {
-                    verifyToken = data.verifyToken;
-                    $('reset-step-2').classList.add('hidden');
-                    $('reset-step-3').classList.remove('hidden');
-                    showToast('Code verified! Set your new PIN.', 'success');
-                } else {
-                    showToast(data.error || 'Invalid code', 'fail');
-                }
-            } catch (e) {
-                showToast('Network error. Try again.', 'fail');
-            }
-        }
-
-        async function setNewPin() {
-            const newPin = $('new-pin-input').value.trim();
-            const confirmPin = $('confirm-new-pin-input').value.trim();
-            
-            if (!newPin || newPin.length !== 4) return showToast('Enter a 4-digit PIN', 'fail');
-            if (newPin !== confirmPin) return showToast('PINs do not match', 'fail');
-            
-            try {
-                const res = await fetch('/api/reset-pin/set', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        token: resetToken, 
-                        verifyToken: verifyToken, 
-                        newPin 
-                    })
-                });
-                
-                const data = await res.json();
-                
-                if (res.ok) {
-                    showToast('PIN reset successful! Please login.', 'success');
-                    hideResetModal();
-                    $('phone-input').value = resetPhone;
-                    showPhoneStep();
-                } else {
-                    showToast(data.error || 'Failed to reset PIN', 'fail');
-                }
-            } catch (e) {
-                showToast('Network error. Try again.', 'fail');
-            }
-        }
-
-        // --- INVITE FUNCTIONS ---
-        function generateInviteLink(roomCode) {
-            return `${BASE_URL}?room=${roomCode}`;
-        }
-
-        function copyToClipboard(text) {
-            navigator.clipboard.writeText(text).then(() => {
-                showToast('Copied to clipboard!', 'success');
-            }).catch(() => {
-                const input = document.createElement('input');
-                input.value = text;
-                document.body.appendChild(input);
-                input.select();
-                document.execCommand('copy');
-                document.body.removeChild(input);
-                showToast('Copied!', 'success');
-            });
-        }
-
-        function shareViaWhatsApp(text) {
-            const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
-            window.open(url, '_blank');
-        }
-
-        function shareViaSMS(text) {
-            const url = `sms:?body=${encodeURIComponent(text)}`;
-            window.open(url, '_blank');
-        }
-
-        function createPrivateRoom() {
-            if (!myPhone) return showToast('Not authenticated', 'fail');
-            if (!socket?.connected) return showToast('Not connected', 'fail');
-            
-            socket.emit('create_private_room');
-            showToast('Creating private room...', '');
-        }
-
-        function joinPrivateRoom(roomCode) {
-            const code = roomCode || $('room-code-input').value.trim().toUpperCase();
-            if (!code) return showToast('Enter a room code', 'fail');
-            if (code.length < 4) return showToast('Invalid room code', 'fail');
-            
-            socket.emit('join_private_room', { roomCode: code });
-            showToast('Joining room...', '');
-        }
-
-        function cancelPrivateRoom() {
-            socket.emit('cancel_private_room');
-        }
-
-        function resetInviteView() {
-            $('invite-options').classList.remove('hidden');
-            $('room-created-view').classList.add('hidden');
-            currentRoomCode = null;
-            waitingForOpponent = false;
-        }
-
-        // --- HISTORY FUNCTIONS ---
-        function loadHistory() {
-            try {
-                const stored = localStorage.getItem(HISTORY_STORAGE_KEY);
-                if (stored) {
-                    gameHistory = JSON.parse(stored);
-                }
-            } catch (e) {
-                console.error('Failed to load history:', e);
-                gameHistory = [];
-            }
-            updateHistoryDisplay();
-        }
-
-        function saveHistory() {
-            try {
-                localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(gameHistory));
-            } catch (e) {
-                console.error('Failed to save history:', e);
-            }
-            updateHistoryDisplay();
-        }
-
-        function addGameToHistory(result, amount) {
-            const game = {
-                id: Date.now() + '-' + Math.random().toString(36).substr(2, 6),
-                timestamp: new Date().toISOString(),
-                result: result,
-                amount: amount,
-                opponent: 'Player'
-            };
-            gameHistory.unshift(game);
-            
-            if (gameHistory.length > 50) {
-                gameHistory = gameHistory.slice(0, 50);
-            }
-            
-            saveHistory();
-        }
-
-        function clearHistory() {
-            gameHistory = [];
-            saveHistory();
-            showToast('History cleared', '');
-        }
-
-        function updateHistoryDisplay() {
-            const historyList = $('history-list');
-            const statWins = $('stat-wins');
-            const statLosses = $('stat-losses');
-            const statDraws = $('stat-draws');
-            
-            const wins = gameHistory.filter(g => g.result === 'win').length;
-            const losses = gameHistory.filter(g => g.result === 'loss').length;
-            const draws = gameHistory.filter(g => g.result === 'draw').length;
-            
-            statWins.textContent = `${wins}W`;
-            statLosses.textContent = `${losses}L`;
-            statDraws.textContent = `${draws}D`;
-            
-            if (gameHistory.length === 0) {
-                historyList.innerHTML = '<div class="empty-history">No games played yet</div>';
-                return;
-            }
-            
-            historyList.innerHTML = gameHistory.slice(0, 10).map(game => {
-                const time = new Date(game.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                const date = new Date(game.timestamp).toLocaleDateString([], { month: 'short', day: 'numeric' });
-                
-                let icon, resultClass, amountClass, amountText;
-                
-                if (game.result === 'win') {
-                    icon = '🏆';
-                    resultClass = 'result-win';
-                    amountClass = 'positive';
-                    amountText = `+KES ${game.amount}`;
-                } else if (game.result === 'loss') {
-                    icon = '❌';
-                    resultClass = 'result-loss';
-                    amountClass = 'negative';
-                    amountText = `-KES ${game.amount}`;
-                } else {
-                    icon = '🤝';
-                    resultClass = 'result-draw';
-                    amountClass = '';
-                    amountText = `KES ${game.amount}`;
-                }
-                
-                return `
-                    <div class="history-item">
-                        <div class="history-result">
-                            <span class="result-icon ${resultClass}">${icon}</span>
-                            <span>${game.result.toUpperCase()}</span>
-                        </div>
-                        <div class="history-time">${date} ${time}</div>
-                        <div class="history-amount ${amountClass}">${amountText}</div>
-                    </div>
-                `;
-            }).join('');
-        }
-
-        // --- SOCKET INITIALIZATION ---
-        function initSocket() {
-            if (socket) {
-                socket.removeAllListeners();
-                socket.disconnect();
-            }
-            
-            socket = io({
-                transports: ['websocket', 'polling'],
-                reconnection: true,
-                reconnectionAttempts: 10,
-                reconnectionDelay: 1000
-            });
-
-            console.log('🚀 Socket initializing...');
-
-            socket.on('connect', () => {
-                console.log('✅ Socket connected:', socket.id);
-                if (myPhone && !authCompleted) {
-                    console.log('🔄 Already logged in');
-                }
-            });
-
-            socket.on('disconnect', (reason) => {
-                console.log('❌ Socket disconnected:', reason);
-                authCompleted = false;
-                if (gameActive) {
-                    showToast('Connection lost. Reconnecting...', 'warn');
-                }
-            });
-
-            socket.on('connect_error', (err) => {
-                console.log('❌ Connection error:', err);
-                showToast('Connection error. Check your internet.', 'fail');
-            });
-
-            socket.on('user_check_result', ({ exists, phone }) => {
-                isRegistering = !exists;
-                checkedPhone = phone;
-                
-                showPinStep();
-                
-                if (isRegistering) {
-                    $('pin-title').textContent = 'Create a 4-Digit PIN';
-                    $('pin-label').textContent = 'Choose PIN';
-                    $('confirm-pin-group').classList.remove('hidden');
-                    $('submit-pin-btn').textContent = 'Create Account';
-                } else {
-                    $('pin-title').textContent = `Welcome back! Enter your PIN`;
-                    $('pin-label').textContent = 'Your PIN';
-                    $('confirm-pin-group').classList.add('hidden');
-                    $('submit-pin-btn').textContent = 'Enter Arena';
-                }
-                $('pin-input').focus();
-            });
-
-            socket.on('registration_success', ({ phone }) => {
-                myPhone = phone;
-                showToast('Account created! Please login with your PIN.', 'success');
-                setTimeout(() => {
-                    showPhoneStep();
-                    $('phone-input').value = phone;
-                }, 1500);
-            });
-
-            socket.on('auth_success', ({ balance }) => {
-                authCompleted = true;
-                myPhone = checkedPhone;
-                console.log('✅ Auth success! Phone:', myPhone, 'Balance:', balance);
-                $('wallet-phone').textContent = myPhone;
-                updateBalance(balance);
-                loginScreen.classList.add('hidden');
-                gameScreen.classList.remove('hidden');
-                setStatus('Ready to play', '');
-                loadHistory();
-                
-                showPhoneStep();
-                $('phone-input').value = '';
-                $('pin-input').value = '';
-                $('confirm-pin-input').value = '';
-                
-                if (pendingRoomJoin) {
-                    console.log('🚪 Auto-joining room from URL:', pendingRoomJoin);
-                    $('room-code-input').value = pendingRoomJoin;
-                    setTimeout(() => {
-                        $('invite-content').classList.add('open');
-                        $('invite-toggle-icon').classList.add('open');
-                        joinPrivateRoom(pendingRoomJoin);
-                        pendingRoomJoin = null;
-                    }, 500);
-                }
-            });
-
-            socket.on('balance_update', ({ balance }) => {
-                console.log('💰 Balance update:', balance);
-                updateBalance(balance);
-            });
-
-            socket.on('online_count', ({ online, searching }) => {
-                $('online-count').textContent = online;
-                $('searching-count').textContent = searching;
-            });
-
-            socket.on('room_created', ({ roomCode, balance }) => {
-                currentRoomCode = roomCode;
-                waitingForOpponent = true;
-                
-                $('invite-options').classList.add('hidden');
-                $('room-created-view').classList.remove('hidden');
-                $('display-room-code').textContent = roomCode;
-                
-                const inviteLink = generateInviteLink(roomCode);
-                $('invite-link').value = inviteLink;
-                
-                updateBalance(balance);
-                showToast(`Room created! Code: ${roomCode}`, 'success');
-            });
-
-            socket.on('waiting_for_opponent', ({ roomCode }) => {
-                setStatus('Waiting for opponent to join...', 'active');
-            });
-
-            socket.on('private_match_found', ({ gameId: gId, mySymbol: symbol, opponent }) => {
-                console.log('✅ Private match found! Symbol:', symbol, 'Opponent:', opponent);
-                waitingForOpponent = false;
-                resetInviteView();
-                $('invite-content').classList.remove('open');
-                $('invite-toggle-icon').classList.remove('open');
-                
-                gameId = gId;
-                mySymbol = symbol;
-                currentTurn = 'X';
-                board = Array(9).fill(null);
-                gameActive = true;
-
-                if (mySymbol === 'X') {
-                    $('indicator-x-label').textContent = 'YOU';
-                    $('indicator-o-label').textContent = 'OPP';
-                } else {
-                    $('indicator-x-label').textContent = 'OPP';
-                    $('indicator-o-label').textContent = 'YOU';
-                }
-
-                initBoard();
-                boardWrap.classList.remove('hidden');
-                playBtn.classList.add('hidden');
-                cancelBtn.classList.add('hidden');
-                updateTurnIndicators();
-                showToast(`Game starting against ${opponent}!`, 'success');
-                setStatus(mySymbol === 'X' ? 'Your turn' : "Opponent's turn...", mySymbol === 'X' ? 'active' : '');
-            });
-
-            socket.on('room_error', ({ error }) => {
-                showToast(error, 'fail');
-                resetInviteView();
-                pendingRoomJoin = null;
-            });
-
-            socket.on('room_cancelled', () => {
-                resetInviteView();
-                $('invite-content').classList.remove('open');
-                $('invite-toggle-icon').classList.remove('open');
-                setStatus('Ready to play', '');
-                showToast('Room cancelled — KES 50 refunded', 'warn');
-            });
-
-            socket.on('waiting', () => {
-                setStatus('Searching for opponent', 'active', true);
-                playBtn.classList.add('hidden');
-                cancelBtn.classList.remove('hidden');
-            });
-
-            socket.on('search_cancelled', () => {
-                setStatus('Ready to play', '');
-                playBtn.disabled = false;
-                playBtn.classList.remove('hidden');
-                cancelBtn.classList.add('hidden');
-                showToast('Search cancelled — KES 50 refunded', 'warn');
-            });
-
-            socket.on('demo_bonus', ({ amount }) => {
-                showToast(`🎉 KES ${amount} free demo balance added!`, 'success');
-            });
-
-            socket.on('match_found', ({ gameId: gId, playerX, playerO }) => {
-                console.log('✅ MATCH FOUND! Game:', gId);
-                cancelBtn.classList.add('hidden');
-                gameId = gId;
-                mySymbol = (socket.id === playerX) ? 'X' : 'O';
-                currentTurn = 'X';
-                board = Array(9).fill(null);
-                gameActive = true;
-
-                if (mySymbol === 'X') {
-                    $('indicator-x-label').textContent = 'YOU';
-                    $('indicator-o-label').textContent = 'OPP';
-                } else {
-                    $('indicator-x-label').textContent = 'OPP';
-                    $('indicator-o-label').textContent = 'YOU';
-                }
-
-                initBoard();
-                boardWrap.classList.remove('hidden');
-                playBtn.classList.add('hidden');
-                updateTurnIndicators();
-                showToast('Match found! Game starting...', 'success');
-            });
-
-            socket.on('move_made', ({ index, symbol, nextTurn }) => {
-                console.log('🎲 Move made:', symbol, 'at', index, 'Next turn:', nextTurn);
-                applyMove(index, symbol);
-                currentTurn = nextTurn;
-                updateTurnIndicators();
-            });
-
-            socket.on('game_finished', ({ result, winner, winnerSocketId, prize, refund }) => {
-                console.log('🏁 Game finished:', result);
-                gameActive = false;
-                [...boardEl.children].forEach(c => c.classList.remove('clickable'));
-
-                if (result === 'DRAW') {
-                    showResult('🤝', 'DRAW', `KES ${refund} refunded to your wallet`);
-                    setStatus('Draw — entry fee refunded', 'warn');
-                    addGameToHistory('draw', refund);
-                } else if (result === 'FORFEIT') {
-                    showResult('🏆', 'VICTORY', `Opponent disconnected — KES ${prize} credited`);
-                    setStatus(`Opponent forfeited — KES ${prize} won`, 'active');
-                    addGameToHistory('win', prize);
-                } else {
-                    const iWon = winnerSocketId === socket.id;
-                    if (iWon) {
-                        highlightWinCells(winner);
-                        showResult('💰', 'VICTORY!', `KES ${prize} added to your wallet`);
-                        setStatus(`You won KES ${prize}!`, 'active');
-                        addGameToHistory('win', prize);
-                    } else {
-                        highlightWinCells(winner);
-                        showResult('❌', 'DEFEAT', 'Better luck next time');
-                        setStatus('You lost this round', 'error');
-                        addGameToHistory('loss', 50);
-                    }
-                }
-            });
-
-            socket.on('error_msg', msg => {
-                console.log('❌ Error:', msg);
-                showToast(msg, 'fail');
-                if (!gameActive) {
-                    playBtn.disabled = false;
-                    setStatus('Ready to play', '');
-                }
-                resetInviteView();
-                pendingRoomJoin = null;
-            });
-
-            socket.on('info_msg', msg => {
-                showToast(msg, '');
-            });
-
-            socket.on('withdrawal_success', ({ amount }) => {
-                showToast(`KES ${amount} sent to your M-Pesa!`, 'success');
-            });
-
-            socket.on('withdrawal_failed', ({ reason }) => {
-                showToast(`Withdrawal failed: ${reason}`, 'fail');
-            });
-        }
-
-        // --- GAME FUNCTIONS ---
-        function initBoard() {
-            boardEl.innerHTML = '';
-            for (let i = 0; i < 9; i++) {
-                const cell = document.createElement('div');
-                cell.className = 'cell';
-                cell.dataset.index = i;
-                cell.addEventListener('click', () => makeMove(i));
-                boardEl.appendChild(cell);
-            }
-        }
-
-        function makeMove(index) {
-            if (!gameActive) {
-                console.log('❌ Game not active');
-                return;
-            }
-            if (currentTurn !== mySymbol) {
-                console.log('❌ Not your turn. Current:', currentTurn, 'You:', mySymbol);
-                showToast("Not your turn!", 'warn');
-                return;
-            }
-            if (board[index]) {
-                console.log('❌ Cell already taken');
-                return;
-            }
-            console.log('🎲 Emitting move:', { gameId, index });
-            socket.emit('make_move', { gameId, index });
-        }
-
-        function applyMove(index, symbol) {
-            board[index] = symbol;
-            const cell = boardEl.children[index];
-            cell.textContent = symbol;
-            cell.className = `cell ${symbol.toLowerCase()}`;
-            cell.classList.remove('clickable');
-        }
-
-        function updateTurnIndicators() {
-            $('indicator-x').classList.toggle('active-turn', currentTurn === 'X');
-            $('indicator-o').classList.toggle('active-turn', currentTurn === 'O');
-
-            if (!gameActive) return;
-            if (currentTurn === mySymbol) {
-                setStatus('Your turn', 'active');
-                [...boardEl.children].forEach((c, i) => {
-                    if (!board[i]) c.classList.add('clickable');
-                });
-            } else {
-                setStatus("Opponent's turn...", '');
-                [...boardEl.children].forEach(c => c.classList.remove('clickable'));
-            }
-        }
-
-        function highlightWinCells(symbol) {
-            const wins = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
-            const b = [...boardEl.children].map(c => c.textContent || null);
-            for (const [a, bc, c] of wins) {
-                if (b[a] === symbol && b[bc] === symbol && b[c] === symbol) {
-                    [a, bc, c].forEach(i => boardEl.children[i].classList.add('win-cell'));
-                }
-            }
-        }
-
-        function showResult(icon, title, sub) {
-            $('result-icon').textContent = icon;
-            $('result-title').textContent = title;
-            $('result-sub').textContent = sub;
-            overlayEl.classList.remove('hidden');
-        }
-
-        function dismissResult() {
-            overlayEl.classList.add('hidden');
-            resetGameState();
-        }
-
-        function resetGameState() {
-            gameId = null;
-            mySymbol = null;
-            gameActive = false;
-            board = Array(9).fill(null);
-            currentTurn = 'X';
-            initBoard();
-            boardWrap.classList.add('hidden');
-            playBtn.classList.remove('hidden');
-            playBtn.disabled = false;
-            cancelBtn.classList.add('hidden');
-            $('indicator-x').classList.remove('active-turn');
-            $('indicator-o').classList.remove('active-turn');
-            setStatus('Ready to play', '');
-            resetInviteView();
-        }
-
-        function setStatus(msg, type = '', searching = false) {
-            statusEl.className = type ? `active ${type}` : '';
-            statusEl.innerHTML = searching
-                ? `<span class="searching-dots">${msg}</span>`
-                : msg;
-        }
-
-        function updateBalance(value) {
-            const formatted = `KES ${parseFloat(value).toFixed(2)}`;
-            balanceEl.textContent = formatted;
-            balanceEl.classList.add('credit');
-            setTimeout(() => balanceEl.classList.remove('credit'), 600);
-        }
-
-        let toastTimer;
-        function showToast(msg, type = '') {
-            const t = $('toast');
-            t.textContent = msg;
-            t.className = `show ${type}`;
-            clearTimeout(toastTimer);
-            toastTimer = setTimeout(() => { t.className = ''; }, 3500);
-        }
-
-        // --- USER ACTIONS ---
-        function logout() {
-            console.log('🚪 Logout');
-            socket.disconnect();
-            myPhone = null;
-            gameActive = false;
-            authCompleted = false;
-            currentRoomCode = null;
-            gameScreen.classList.add('hidden');
-            loginScreen.classList.remove('hidden');
-            setTimeout(() => initSocket(), 100);
-        }
-
-        function findMatch() {
-            if (!myPhone) {
-                showToast('Not authenticated', 'fail');
-                return;
-            }
-            
-            if (!socket?.connected) {
-                socket.connect();
-                showToast('Reconnecting... Try again in a moment', 'warn');
-                setTimeout(() => {
-                    if (socket.connected) findMatch();
-                }, 1000);
-                return;
-            }
-            
-            playBtn.disabled = true;
-            setStatus('Searching for opponent', 'active', true);
-            socket.emit('find_match');
-        }
-
-        function cancelSearch() {
-            socket.emit('cancel_search');
-        }
-
-        function toggleInvite() {
-            const content = $('invite-content');
-            const icon = $('invite-toggle-icon');
-            content.classList.toggle('open');
-            icon.classList.toggle('open');
-        }
-
-        function toggleHistory() {
-            const content = $('history-content');
-            const icon = $('history-toggle-icon');
-            content.classList.toggle('open');
-            icon.classList.toggle('open');
-        }
-
-        // --- MODAL HANDLERS ---
-        function showDepositModal() { $('deposit-modal').classList.remove('hidden'); }
-        function hideDepositModal() { $('deposit-modal').classList.add('hidden'); }
-        function showWithdrawModal() {
-            $('withdraw-balance-hint').textContent = `Available: ${balanceEl.textContent}`;
-            $('withdraw-modal').classList.remove('hidden');
-        }
-        function hideWithdrawModal() {
-            $('withdraw-modal').classList.add('hidden');
-            $('withdraw-amount').value = '';
-        }
-
-        async function submitWithdraw() {
-            const amount = parseInt($('withdraw-amount').value, 10);
-            if (!amount || amount < 10) return showToast('Minimum withdrawal is KES 10', 'fail');
-            try {
-                const res = await fetch('/mpesa/withdraw', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ phone: myPhone, amount }),
-                });
-                const data = await res.json();
-                if (res.ok) {
-                    showToast(data.msg, 'success');
-                    hideWithdrawModal();
-                } else {
-                    showToast(data.error || 'Withdrawal failed', 'fail');
-                }
-            } catch {
-                showToast('Network error. Try again.', 'fail');
-            }
-        }
-
-        async function submitDeposit() {
-            const amount = parseInt($('deposit-amount').value, 10);
-            if (!amount || amount < 10) return showToast('Minimum deposit is KES 10', 'fail');
-            try {
-                const res = await fetch('/mpesa/deposit', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ phone: myPhone, amount }),
-                });
-                const data = await res.json();
-                if (res.ok) {
-                    showToast(data.msg, 'success');
-                    hideDepositModal();
-                } else {
-                    showToast(data.error || 'Deposit failed', 'fail');
-                }
-            } catch {
-                showToast('Network error. Try again.', 'fail');
-            }
-        }
-
-        // --- INITIALIZE ---
-        function bindEvents() {
-            $('continue-btn').addEventListener('click', checkUserAndProceed);
-            $('submit-pin-btn').addEventListener('click', submitPin);
-            $('back-btn').addEventListener('click', showPhoneStep);
-            $('forgot-pin-link').addEventListener('click', showResetModal);
-            
-            $('close-reset-modal').addEventListener('click', hideResetModal);
-            $('request-reset-btn').addEventListener('click', requestResetCode);
-            $('verify-code-btn').addEventListener('click', verifyResetCode);
-            $('set-new-pin-btn').addEventListener('click', setNewPin);
-            $('back-to-request-btn').addEventListener('click', () => {
-                $('reset-step-2').classList.add('hidden');
-                $('reset-step-1').classList.remove('hidden');
-            });
-            
-            $('logout-btn').addEventListener('click', logout);
-            $('play-btn').addEventListener('click', (e) => { e.preventDefault(); findMatch(); });
-            $('cancel-btn').addEventListener('click', cancelSearch);
-            $('deposit-btn').addEventListener('click', showDepositModal);
-            $('withdraw-btn').addEventListener('click', showWithdrawModal);
-            
-            $('submit-deposit').addEventListener('click', submitDeposit);
-            $('cancel-deposit').addEventListener('click', hideDepositModal);
-            $('submit-withdraw').addEventListener('click', submitWithdraw);
-            $('cancel-withdraw').addEventListener('click', hideWithdrawModal);
-            $('dismiss-result').addEventListener('click', dismissResult);
-            
-            $('history-toggle').addEventListener('click', toggleHistory);
-            $('clear-history').addEventListener('click', clearHistory);
-            
-            $('invite-toggle').addEventListener('click', toggleInvite);
-            $('create-room-btn').addEventListener('click', createPrivateRoom);
-            $('join-room-btn').addEventListener('click', () => joinPrivateRoom());
-            $('cancel-room-btn').addEventListener('click', cancelPrivateRoom);
-            
-            $('copy-code-btn').addEventListener('click', () => {
-                copyToClipboard(currentRoomCode);
-            });
-            
-            $('share-whatsapp').addEventListener('click', () => {
-                const link = generateInviteLink(currentRoomCode);
-                shareViaWhatsApp(`Join me for a game of TicTac Cash! Use code: ${currentRoomCode} or click: ${link}`);
-            });
-            
-            $('share-sms').addEventListener('click', () => {
-                const link = generateInviteLink(currentRoomCode);
-                shareViaSMS(`Join me for TicTac Cash! Code: ${currentRoomCode} - ${link}`);
-            });
-            
-            $('share-clipboard').addEventListener('click', () => {
-                const link = generateInviteLink(currentRoomCode);
-                copyToClipboard(link);
-            });
-            
-            $('phone-input').addEventListener('keydown', e => { if (e.key === 'Enter') checkUserAndProceed(); });
-            $('pin-input').addEventListener('keydown', e => { if (e.key === 'Enter') submitPin(); });
-            $('confirm-pin-input').addEventListener('keydown', e => { if (e.key === 'Enter') submitPin(); });
-            $('deposit-amount').addEventListener('keydown', e => { if (e.key === 'Enter') submitDeposit(); });
-            $('withdraw-amount').addEventListener('keydown', e => { if (e.key === 'Enter') submitWithdraw(); });
-            $('room-code-input').addEventListener('keydown', e => { if (e.key === 'Enter') joinPrivateRoom(); });
-            
-            $('pin-input').addEventListener('input', (e) => {
-                e.target.value = e.target.value.replace(/\D/g, '').slice(0, 4);
-            });
-            $('confirm-pin-input').addEventListener('input', (e) => {
-                e.target.value = e.target.value.replace(/\D/g, '').slice(0, 4);
-            });
-            $('reset-code-input').addEventListener('input', (e) => {
-                e.target.value = e.target.value.replace(/\D/g, '').slice(0, 6);
-            });
-            $('new-pin-input').addEventListener('input', (e) => {
-                e.target.value = e.target.value.replace(/\D/g, '').slice(0, 4);
-            });
-            $('confirm-new-pin-input').addEventListener('input', (e) => {
-                e.target.value = e.target.value.replace(/\D/g, '').slice(0, 4);
-            });
-            
-            console.log('✅ All event listeners bound');
-        }
-
-        initSocket();
-        initBoard();
-        bindEvents();
-        
-        window.findMatch = findMatch;
-        
-        setTimeout(() => { playBtn.disabled = false; }, 500);
-    })();
+        });
+        socket.on('error_msg',msg=>{showToast(msg,'fail');if(!gameActive){$('play-btn').disabled=false;setStatus('Ready to play','');}});
+        socket.on('chips_received',({from,amount})=>{showToast(`Received ${amount} chips!`,'success');});
+        socket.on('transfer_complete',({amount,fee,newBalance})=>{updateChipDisplay(newBalance);showToast(`✅ ${amount} chips sent! Fee: ${fee}`,'success');$('send-transfer-btn').disabled=false;setTimeout(hideTransferModal,1500);});
+        socket.on('chips_credited',({chips,newBalance})=>{updateChipDisplay(newBalance);showToast(`✅ ${chips} chips credited!`,'success');});
+    }
+    
+    // Event bindings
+    function bindEvents() {
+        $('continue-btn').addEventListener('click',checkUserAndProceed);
+        $('submit-pin-btn').addEventListener('click',submitPin);
+        $('back-btn').addEventListener('click',showPhoneStep);
+        $('forgot-pin-link').addEventListener('click',showResetModal);
+        $('close-reset-modal').addEventListener('click',hideResetModal);
+        $('request-reset-btn').addEventListener('click',requestResetCode);
+        $('verify-code-btn').addEventListener('click',verifyResetCode);
+        $('set-new-pin-btn').addEventListener('click',setNewPin);
+        $('back-to-request-btn').addEventListener('click',()=>{$('reset-step-2').classList.add('hidden');$('reset-step-1').classList.remove('hidden');});
+        $('logout-btn').addEventListener('click',logout);
+        $('play-btn').addEventListener('click',(e)=>{e.preventDefault();findMatch();});
+        $('cancel-btn').addEventListener('click',cancelSearch);
+        $('buy-chips-btn').addEventListener('click',showChipStore);
+        $('close-chip-modal').addEventListener('click',hideChipStore);
+        $('verify-payment-btn').addEventListener('click',verifyPayment);
+        $('transfer-btn').addEventListener('click',showTransferModal);
+        $('close-transfer-modal').addEventListener('click',hideTransferModal);
+        $('send-transfer-btn').addEventListener('click',sendChips);
+        $('history-toggle').addEventListener('click',toggleHistory);
+        $('clear-history').addEventListener('click',clearHistory);
+        $('invite-toggle').addEventListener('click',toggleInvite);
+        $('create-room-btn').addEventListener('click',createPrivateRoom);
+        $('join-room-btn').addEventListener('click',()=>joinPrivateRoom());
+        $('cancel-room-btn').addEventListener('click',cancelPrivateRoom);
+        $('dismiss-result').addEventListener('click',dismissResult);
+        $('copy-code-btn').addEventListener('click',()=>copyToClipboard(currentRoomCode));
+        $('share-whatsapp').addEventListener('click',()=>shareWhatsApp(`Join me for TicTac Cash! Code: ${currentRoomCode} - ${generateInviteLink(currentRoomCode)}`));
+        $('share-sms').addEventListener('click',()=>shareSMS(`Join me for TicTac Cash! Code: ${currentRoomCode} - ${generateInviteLink(currentRoomCode)}`));
+        $('share-clipboard').addEventListener('click',()=>copyToClipboard(generateInviteLink(currentRoomCode)));
+        ['pin-input','confirm-pin-input','new-pin-input','confirm-new-pin-input'].forEach(id=>{$(id)?.addEventListener('input',e=>{e.target.value=e.target.value.replace(/\D/g,'').slice(0,4);});});
+        $('reset-code-input')?.addEventListener('input',e=>{e.target.value=e.target.value.replace(/\D/g,'').slice(0,6);});
+        $('phone-input').addEventListener('keydown',e=>{if(e.key==='Enter')checkUserAndProceed();});
+        $('pin-input').addEventListener('keydown',e=>{if(e.key==='Enter')submitPin();});
+        $('room-code-input').addEventListener('keydown',e=>{if(e.key==='Enter')joinPrivateRoom();});
+    }
+    
+    initSocket();
+    initBoard();
+    bindEvents();
+    window.findMatch = findMatch;
+    setTimeout(()=>{$('play-btn').disabled=false;},500);
+})();
 </script>
 </body>
 </html>
