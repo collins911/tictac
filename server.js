@@ -9,57 +9,173 @@ const rateLimit = require('express-rate-limit');
 const path     = require('path');
 const crypto   = require('crypto');
 const bcrypt   = require('bcryptjs');
+const hpp      = require('hpp');
+const xss      = require('xss-clean');
+const mongoSanitize = require('express-mongo-sanitize');
+const csrf     = require('csurf');
+const cookieParser = require('cookie-parser');
+const session  = require('express-session');
+const RedisStore = require('connect-redis').default;
 
 const app    = express();
 const server = http.createServer(app);
 const io     = new Server(server, { 
     transports: ['websocket', 'polling'],
     cors: {
-        origin: "*",
-        methods: ["GET", "POST"]
-    }
+        origin: process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : "*",
+        methods: ["GET", "POST"],
+        credentials: true
+    },
+    pingTimeout: 60000,
+    pingInterval: 25000,
+    connectTimeout: 45000,
+    maxHttpBufferSize: 1e6 // 1MB
 });
 
-// ─── REDIS (balances and PINs) ────────────────────────────────────────────
-const redis = createClient({ url: process.env.REDIS_URL });
+// ─── REDIS ────────────────────────────────────────────────────────────────
+const redis = createClient({ 
+    url: process.env.REDIS_URL,
+    socket: {
+        reconnectStrategy: (retries) => Math.min(retries * 100, 3000),
+        connectTimeout: 10000
+    }
+});
 redis.on('error',   e => console.error('Redis error:', e.message));
 redis.on('connect', () => console.log('Redis connected'));
 
 // ─── IN-MEMORY STATE ──────────────────────────────────────────────────────
-let   waitingSocket = null;          // single socket waiting for opponent
-const games         = new Map();     // gameId -> game object
-const balances      = new Map();     // phone  -> balance (fallback if Redis down)
-const privateRooms  = new Map();     // roomCode -> { creator, createdAt, players }
-const userPins      = new Map();     // phone  -> hashed PIN (fallback)
-const userCreatedAt = new Map();     // phone  -> signup timestamp (fallback)
-const resetTokens   = new Map();     // token -> { phone, code, expires, attempts, verified, verifyToken }
+let   waitingSocket = null;
+const games         = new Map();
+const balances      = new Map();
+const privateRooms  = new Map();
+const userPins      = new Map();
+const userCreatedAt = new Map();
+const resetTokens   = new Map();
+const failedLogins  = new Map(); // phone -> { count, lockedUntil }
+const ipRequests    = new Map(); // ip -> { count, windowStart }
 
-// ─── ADMIN CONFIG ─────────────────────────────────────────────────────────
-const ADMIN_SECRET = process.env.ADMIN_SECRET || 'admin123'; // CHANGE THIS IN .env!
+// ─── SECURITY CONFIG ──────────────────────────────────────────────────────
+const ADMIN_SECRET = process.env.ADMIN_SECRET || crypto.randomBytes(32).toString('hex');
+const SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex');
+const MAX_LOGIN_ATTEMPTS = 5;
+const LOCKOUT_DURATION = 15 * 60 * 1000; // 15 minutes
+const IP_RATE_LIMIT = 100; // requests per minute
 
-// ─── SECURITY ────────────────────────────────────────────────────────────
+// ─── SECURITY MIDDLEWARE ──────────────────────────────────────────────────
 app.use(helmet({
     contentSecurityPolicy: {
         directives: {
             defaultSrc: ["'self'"],
-            scriptSrc:  ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-            styleSrc:   ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-            fontSrc:    ["'self'", "https://fonts.gstatic.com"],
+            scriptSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+            styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+            fontSrc: ["'self'", "https://fonts.gstatic.com"],
             connectSrc: ["'self'", "wss:", "ws:", "https:"],
-            imgSrc:     ["'self'", "data:"],
-            frameSrc:   ["'none'"],
+            imgSrc: ["'self'", "data:"],
+            frameSrc: ["'none'"],
+            objectSrc: ["'none'"],
+            upgradeInsecureRequests: []
         },
     },
-    crossOriginEmbedderPolicy: false,
+    crossOriginEmbedderPolicy: true,
+    crossOriginOpenerPolicy: { policy: "same-origin" },
+    crossOriginResourcePolicy: { policy: "same-origin" },
+    dnsPrefetchControl: { allow: false },
+    frameguard: { action: "deny" },
+    hsts: { maxAge: 31536000, includeSubDomains: true, preload: true },
+    ieNoOpen: true,
+    noSniff: true,
+    referrerPolicy: { policy: "strict-origin-when-cross-origin" },
+    xssFilter: true
 }));
-app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
+
+// Body parser with size limits
+app.use(express.json({ limit: '100kb' }));
+app.use(express.urlencoded({ extended: true, limit: '100kb' }));
+app.use(cookieParser());
+app.use(xss());
+app.use(mongoSanitize());
+app.use(hpp());
+
+// Session management
+app.use(session({
+    store: redis.isReady ? new RedisStore({ client: redis }) : undefined,
+    secret: SESSION_SECRET,
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+        secure: process.env.NODE_ENV === 'production',
+        httpOnly: true,
+        maxAge: 24 * 60 * 60 * 1000, // 24 hours
+        sameSite: 'strict'
+    },
+    name: 'tictac_sid'
+}));
+
+app.use(express.static(path.join(__dirname, 'public'), {
+    maxAge: '1h',
+    etag: true,
+    lastModified: true
+}));
+
+// ─── IP-BASED RATE LIMITING ───────────────────────────────────────────────
+const ipRateLimiter = (req, res, next) => {
+    const ip = req.ip || req.connection.remoteAddress;
+    const now = Date.now();
+    const windowStart = now - 60000;
+    
+    let record = ipRequests.get(ip);
+    if (!record || record.windowStart < windowStart) {
+        record = { count: 0, windowStart: now };
+    }
+    
+    record.count++;
+    ipRequests.set(ip, record);
+    
+    if (record.count > IP_RATE_LIMIT) {
+        return res.status(429).json({ error: 'Too many requests. Please slow down.' });
+    }
+    
+    next();
+};
+
+app.use(ipRateLimiter);
 
 // ─── RATE LIMITING ────────────────────────────────────────────────────────
-const depositLimiter  = rateLimit({ windowMs: 60000, max: 5,  message: { error: 'Too many deposit attempts.' } });
-const withdrawLimiter = rateLimit({ windowMs: 60000, max: 3,  message: { error: 'Too many withdrawal attempts.' } });
-const adminLimiter    = rateLimit({ windowMs: 60000, max: 10, message: { error: 'Too many admin requests.' } });
-const resetLimiter    = rateLimit({ windowMs: 15 * 60 * 1000, max: 3, message: { error: 'Too many reset attempts. Try again later.' } });
+const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 10,
+    message: { error: 'Too many login attempts. Try again later.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req) => req.body?.phone || req.ip
+});
+
+const depositLimiter = rateLimit({ 
+    windowMs: 60 * 60 * 1000,
+    max: 5,
+    message: { error: 'Too many deposit attempts.' },
+    standardHeaders: true
+});
+
+const withdrawLimiter = rateLimit({ 
+    windowMs: 60 * 60 * 1000,
+    max: 3,
+    message: { error: 'Too many withdrawal attempts.' },
+    standardHeaders: true
+});
+
+const resetLimiter = rateLimit({ 
+    windowMs: 60 * 60 * 1000,
+    max: 3,
+    message: { error: 'Too many reset attempts.' },
+    standardHeaders: true
+});
+
+const adminLimiter = rateLimit({ 
+    windowMs: 5 * 60 * 1000,
+    max: 20,
+    message: { error: 'Too many admin requests.' }
+});
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────
 const ENTRY_FEE   = 50;
@@ -67,6 +183,8 @@ const WIN_PRIZE   = 85;
 const DRAW_REFUND = 50;
 const WITHDRAW_FEE = 10;
 const DEMO_BONUS  = 1000;
+const MAX_BALANCE = 1000000;
+const MIN_WITHDRAWAL = 100;
 const WIN_COMBOS  = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
 
 // ─── INTASEND ─────────────────────────────────────────────────────────────
@@ -76,9 +194,16 @@ const intasend = new IntaSend(
     process.env.NODE_ENV !== 'production'
 );
 
-// ─── HELPERS ─────────────────────────────────────────────────────────────
-const audit = (event, data) =>
-    console.log(JSON.stringify({ timestamp: new Date().toISOString(), event, ...data }));
+// ─── SECURITY HELPERS ─────────────────────────────────────────────────────
+const audit = (event, data) => {
+    const log = JSON.stringify({ 
+        timestamp: new Date().toISOString(), 
+        event, 
+        ...data,
+        ip: data.ip || 'internal'
+    });
+    console.log(log);
+};
 
 const normalizePhone = (phone) => {
     const c = String(phone).replace(/\D/g, '');
@@ -98,28 +223,70 @@ const validatePin = (pin) => {
     return /^\d{4}$/.test(pin);
 };
 
-// Generate a short room code
 const generateRoomCode = () => {
     return crypto.randomBytes(3).toString('hex').toUpperCase();
 };
 
-// Generate a random 6-digit reset code
 const generateResetCode = () => {
     return Math.floor(100000 + Math.random() * 900000).toString();
+};
+
+const generateSecureToken = () => {
+    return crypto.randomBytes(32).toString('hex');
+};
+
+// ─── LOGIN ATTEMPT TRACKING ───────────────────────────────────────────────
+const checkLoginAttempts = (phone) => {
+    const record = failedLogins.get(phone);
+    if (!record) return { allowed: true };
+    
+    if (record.lockedUntil && record.lockedUntil > Date.now()) {
+        const remainingMinutes = Math.ceil((record.lockedUntil - Date.now()) / 60000);
+        return { allowed: false, reason: `Account locked. Try again in ${remainingMinutes} minutes.` };
+    }
+    
+    if (record.count >= MAX_LOGIN_ATTEMPTS) {
+        record.lockedUntil = Date.now() + LOCKOUT_DURATION;
+        failedLogins.set(phone, record);
+        return { allowed: false, reason: `Too many failed attempts. Account locked for 15 minutes.` };
+    }
+    
+    return { allowed: true };
+};
+
+const recordFailedLogin = (phone) => {
+    let record = failedLogins.get(phone) || { count: 0, lockedUntil: null };
+    record.count++;
+    failedLogins.set(phone, record);
+};
+
+const resetLoginAttempts = (phone) => {
+    failedLogins.delete(phone);
+};
+
+// ─── INPUT VALIDATION ─────────────────────────────────────────────────────
+const sanitizeInput = (input) => {
+    if (typeof input !== 'string') return input;
+    return input
+        .replace(/[<>]/g, '')
+        .replace(/javascript:/gi, '')
+        .replace(/on\w+=/gi, '')
+        .trim();
 };
 
 // ─── ADMIN AUTH MIDDLEWARE ────────────────────────────────────────────────
 const adminAuth = (req, res, next) => {
     const secret = req.headers['x-admin-secret'] || req.query.secret;
     if (!secret || secret !== ADMIN_SECRET) {
-        return res.status(401).json({ error: 'Unauthorized. Invalid admin secret.' });
+        audit('admin_auth_failed', { ip: req.ip });
+        return res.status(401).json({ error: 'Unauthorized' });
     }
     next();
 };
 
 // ─── PIN MANAGEMENT ───────────────────────────────────────────────────────
 const hashPin = async (pin) => {
-    return await bcrypt.hash(pin, 10);
+    return await bcrypt.hash(pin, 12);
 };
 
 const verifyPin = async (pin, hash) => {
@@ -171,23 +338,24 @@ const getUserCreatedAt = async (phone) => {
     return userCreatedAt.get(phone) || null;
 };
 
-// ─── BALANCE (Redis with in-memory fallback) ──────────────────────────────
+// ─── BALANCE MANAGEMENT ───────────────────────────────────────────────────
 const getBalance = async (phone) => {
     try {
         if (redis.isReady) {
             const v = await redis.get(`user:${phone}:balance`);
             const bal = parseFloat(v || '0');
             balances.set(phone, bal);
-            return bal;
+            return Math.min(bal, MAX_BALANCE);
         }
     } catch(e) {}
-    return balances.get(phone) || 0;
+    return Math.min(balances.get(phone) || 0, MAX_BALANCE);
 };
 
 const setBalance = async (phone, amount) => {
-    balances.set(phone, amount);
+    const cappedAmount = Math.min(amount, MAX_BALANCE);
+    balances.set(phone, cappedAmount);
     try {
-        if (redis.isReady) await redis.set(`user:${phone}:balance`, String(amount));
+        if (redis.isReady) await redis.set(`user:${phone}:balance`, String(cappedAmount));
     } catch(e) {}
 };
 
@@ -200,8 +368,8 @@ const deductBalance = async (phone, amount) => {
 
 const creditBalance = async (phone, amount) => {
     const bal = await getBalance(phone);
-    const newBal = parseFloat((bal + amount).toFixed(2));
-    await setBalance(phone, newBal);
+    const newBal = Math.min(bal + amount, MAX_BALANCE);
+    await setBalance(phone, parseFloat(newBal.toFixed(2)));
     return newBal;
 };
 
@@ -220,48 +388,64 @@ const setDemoClaimed = async (phone) => {
 
 // ─── ONLINE COUNT ─────────────────────────────────────────────────────────
 const broadcastOnlineCount = () => {
-    const online    = io.sockets.sockets.size;
+    const online = io.sockets.sockets.size;
     const searching = waitingSocket ? 1 : 0;
-    console.log(`📊 Online: ${online}, Searching: ${searching}`);
     io.emit('online_count', { online, searching });
 };
 
 // ─── PERIODIC CLEANUP ─────────────────────────────────────────────────────
 setInterval(() => {
+    const now = Date.now();
+    
+    // Clean waiting socket
     if (waitingSocket) {
         const stillConnected = io.sockets.sockets.has(waitingSocket.id);
-        if (!stillConnected) {
-            console.log('🧹 Cleaning up stale waiting socket');
-            waitingSocket = null;
-            broadcastOnlineCount();
-        } else if (!waitingSocket.searching) {
-            console.log('🧹 Cleaning up waiting socket that stopped searching');
+        if (!stillConnected || !waitingSocket.searching) {
             waitingSocket = null;
             broadcastOnlineCount();
         }
     }
     
-    // Clean up old private rooms (older than 1 hour)
-    const now = Date.now();
+    // Clean private rooms (1 hour)
     for (const [code, room] of privateRooms.entries()) {
-        if (now - room.createdAt > 3600000) { // 1 hour
+        if (now - room.createdAt > 3600000) {
             privateRooms.delete(code);
-            console.log(`🧹 Cleaned up old private room: ${code}`);
         }
     }
     
-    // Clean up expired reset tokens
+    // Clean reset tokens (10 minutes)
     for (const [key, value] of resetTokens.entries()) {
         if (value.expires < now) {
             resetTokens.delete(key);
         }
     }
-}, 5000);
+    
+    // Clean failed login attempts
+    for (const [phone, record] of failedLogins.entries()) {
+        if (record.lockedUntil && record.lockedUntil < now) {
+            failedLogins.delete(phone);
+        }
+    }
+    
+    // Clean IP rate limits
+    for (const [ip, record] of ipRequests.entries()) {
+        if (now - record.windowStart > 60000) {
+            ipRequests.delete(ip);
+        }
+    }
+}, 30000);
 
 // ─── HEALTH CHECK ─────────────────────────────────────────────────────────
-app.get('/health', (req, res) => res.json({ status: 'ok', ts: Date.now(), redis: redis.isReady }));
+app.get('/health', (req, res) => {
+    res.json({ 
+        status: 'ok', 
+        ts: Date.now(), 
+        redis: redis.isReady,
+        uptime: process.uptime()
+    });
+});
 
-// ─── PUBLIC STATS (NO AUTH REQUIRED) ──────────────────────────────────────
+// ─── PUBLIC STATS ─────────────────────────────────────────────────────────
 app.get('/api/stats/public', async (req, res) => {
     try {
         let totalUsers = 0;
@@ -276,11 +460,10 @@ app.get('/api/stats/public', async (req, res) => {
             status: 'ok',
             totalUsers,
             onlinePlayers: io.sockets.sockets.size,
-            activeGames: games.size,
-            waitingPlayers: waitingSocket ? 1 : 0
+            activeGames: games.size
         });
     } catch (e) {
-        res.status(500).json({ error: e.message });
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
 
@@ -321,24 +504,6 @@ app.get('/admin/stats', adminLimiter, adminAuth, async (req, res) => {
             }
         }
         
-        const topPlayers = [];
-        if (redis.isReady) {
-            const pinKeys = await redis.keys('user:*:pin');
-            const playersWithBalance = [];
-            for (const key of pinKeys) {
-                const phone = key.split(':')[1];
-                const bal = await getBalance(phone);
-                playersWithBalance.push({ phone, balance: bal });
-            }
-            playersWithBalance.sort((a, b) => b.balance - a.balance);
-            topPlayers.push(...playersWithBalance.slice(0, 10));
-        } else {
-            for (const [phone, bal] of balances.entries()) {
-                topPlayers.push({ phone, balance: bal });
-            }
-            topPlayers.sort((a, b) => b.balance - a.balance);
-        }
-        
         res.json({
             totalUsers,
             totalBalance: totalBalance.toFixed(2),
@@ -348,7 +513,6 @@ app.get('/admin/stats', adminLimiter, adminAuth, async (req, res) => {
             onlinePlayers: io.sockets.sockets.size,
             waitingPlayers: waitingSocket ? 1 : 0,
             privateRooms: privateRooms.size,
-            topPlayers: topPlayers.slice(0, 10),
             timestamp: new Date().toISOString()
         });
     } catch (e) {
@@ -370,83 +534,17 @@ app.get('/admin/users', adminLimiter, adminAuth, async (req, res) => {
                 const createdAt = await getUserCreatedAt(phone);
                 
                 users.push({
-                    phone,
+                    phone: phone.slice(0, 6) + '****' + phone.slice(-2),
                     balance: balance.toFixed(2),
                     demoClaimed: !!demoClaimed,
                     createdAt: createdAt ? new Date(createdAt).toISOString() : null
                 });
             }
-        } else {
-            for (const [phone] of userPins.entries()) {
-                const balance = balances.get(phone) || 0;
-                const createdAt = userCreatedAt.get(phone);
-                
-                users.push({
-                    phone,
-                    balance: balance.toFixed(2),
-                    demoClaimed: balances.has(phone),
-                    createdAt: createdAt ? new Date(createdAt).toISOString() : null
-                });
-            }
         }
         
-        users.sort((a, b) => {
-            if (a.createdAt && b.createdAt) {
-                return b.createdAt.localeCompare(a.createdAt);
-            }
-            return a.phone.localeCompare(b.phone);
-        });
+        users.sort((a, b) => b.createdAt?.localeCompare(a.createdAt || '') || 0);
         
-        res.json({
-            total: users.length,
-            users
-        });
-    } catch (e) {
-        res.status(500).json({ error: e.message });
-    }
-});
-
-app.get('/admin/recent-users', adminLimiter, adminAuth, async (req, res) => {
-    try {
-        const users = [];
-        const now = Date.now();
-        const oneDayAgo = now - 24 * 60 * 60 * 1000;
-        
-        if (redis.isReady) {
-            const pinKeys = await redis.keys('user:*:pin');
-            
-            for (const key of pinKeys) {
-                const phone = key.split(':')[1];
-                const createdAt = await getUserCreatedAt(phone);
-                
-                if (createdAt && createdAt > oneDayAgo) {
-                    const balance = await getBalance(phone);
-                    users.push({
-                        phone,
-                        balance: balance.toFixed(2),
-                        createdAt: new Date(createdAt).toISOString()
-                    });
-                }
-            }
-        } else {
-            for (const [phone, ts] of userCreatedAt.entries()) {
-                if (ts > oneDayAgo) {
-                    const balance = balances.get(phone) || 0;
-                    users.push({
-                        phone,
-                        balance: balance.toFixed(2),
-                        createdAt: new Date(ts).toISOString()
-                    });
-                }
-            }
-        }
-        
-        users.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-        
-        res.json({
-            total: users.length,
-            users
-        });
+        res.json({ total: users.length, users });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
@@ -463,10 +561,7 @@ app.get('/admin/count', adminLimiter, adminAuth, async (req, res) => {
             totalUsers = userPins.size;
         }
         
-        res.json({
-            totalUsers,
-            timestamp: new Date().toISOString()
-        });
+        res.json({ totalUsers, timestamp: new Date().toISOString() });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
@@ -483,11 +578,11 @@ app.post('/api/reset-pin/request', resetLimiter, async (req, res) => {
     
     const exists = await userExists(normalizedPhone);
     if (!exists) {
-        return res.status(404).json({ error: 'No account found with this phone number.' });
+        return res.status(404).json({ error: 'No account found.' });
     }
     
     const resetCode = generateResetCode();
-    const token = crypto.randomBytes(16).toString('hex');
+    const token = generateSecureToken();
     
     resetTokens.set(token, {
         phone: normalizedPhone,
@@ -498,8 +593,9 @@ app.post('/api/reset-pin/request', resetLimiter, async (req, res) => {
         verifyToken: null
     });
     
+    audit('pin_reset_requested', { phone: normalizedPhone, ip: req.ip });
+    
     if (process.env.DEMO_MODE === 'true') {
-        audit('pin_reset_requested_demo', { phone: normalizedPhone, code: resetCode });
         return res.json({ 
             msg: 'Reset code generated (Demo Mode)',
             demoCode: resetCode,
@@ -507,20 +603,10 @@ app.post('/api/reset-pin/request', resetLimiter, async (req, res) => {
         });
     }
     
-    try {
-        const message = `Your TicTac Cash PIN reset code is: ${resetCode}. Valid for 10 minutes.`;
-        console.log(`📱 SMS to ${normalizedPhone}: ${message}`);
-        
-        audit('pin_reset_requested', { phone: normalizedPhone });
-        
-        res.json({ 
-            msg: 'Reset code sent to your phone.',
-            token: token
-        });
-    } catch (err) {
-        resetTokens.delete(token);
-        res.status(500).json({ error: 'Failed to send SMS. Try again.' });
-    }
+    res.json({ 
+        msg: 'Reset code sent to your phone.',
+        token: token
+    });
 });
 
 app.post('/api/reset-pin/verify', async (req, res) => {
@@ -542,7 +628,7 @@ app.post('/api/reset-pin/verify', async (req, res) => {
     
     if (resetData.attempts >= 3) {
         resetTokens.delete(token);
-        return res.status(400).json({ error: 'Too many failed attempts. Request a new code.' });
+        return res.status(400).json({ error: 'Too many failed attempts.' });
     }
     
     if (resetData.code !== code) {
@@ -550,7 +636,7 @@ app.post('/api/reset-pin/verify', async (req, res) => {
         return res.status(400).json({ error: 'Invalid reset code.' });
     }
     
-    const verifyToken = crypto.randomBytes(16).toString('hex');
+    const verifyToken = generateSecureToken();
     resetData.verified = true;
     resetData.verifyToken = verifyToken;
     
@@ -583,10 +669,11 @@ app.post('/api/reset-pin/set', async (req, res) => {
     await setUserPin(resetData.phone, newPin);
     
     resetTokens.delete(token);
+    resetLoginAttempts(resetData.phone);
     
-    audit('pin_reset_complete', { phone: resetData.phone });
+    audit('pin_reset_complete', { phone: resetData.phone, ip: req.ip });
     
-    res.json({ msg: 'PIN reset successful. You can now login with your new PIN.' });
+    res.json({ msg: 'PIN reset successful.' });
 });
 
 // ─── GET ROOM INFO ────────────────────────────────────────────────────────
@@ -596,7 +683,7 @@ app.get('/api/room/:code', (req, res) => {
     if (room) {
         res.json({ 
             exists: true, 
-            creator: room.creator,
+            creator: room.creator.slice(0, 6) + '****' + room.creator.slice(-2),
             playerJoined: !!room.playerSocket 
         });
     } else {
@@ -619,20 +706,27 @@ app.post('/mpesa/deposit', depositLimiter, async (req, res) => {
     const { phone, amount } = req.body;
     const normalizedPhone = normalizePhone(phone);
     if (!normalizedPhone) return res.status(400).json({ error: 'Invalid phone number.' });
+    
     const parsedAmount = validateAmount(amount);
     if (!parsedAmount) return res.status(400).json({ error: 'Invalid amount.' });
-    if (process.env.DEMO_MODE === 'true')
+    
+    if (process.env.DEMO_MODE === 'true') {
         return res.status(403).json({ error: 'Deposits disabled in demo mode.' });
+    }
+    
     try {
         const collection = intasend.collection();
         await collection.mpesaStkPush({
-            first_name: 'Player', last_name: '',
+            first_name: 'Player',
+            last_name: '',
             email: `${normalizedPhone}@tictaccash.app`,
             host: process.env.BASE_URL,
-            amount: parsedAmount, phone_number: normalizedPhone,
+            amount: parsedAmount,
+            phone_number: normalizedPhone,
             api_ref: `deposit_${normalizedPhone}_${Date.now()}`,
         });
-        audit('deposit_initiated', { phone: normalizedPhone, amount: parsedAmount });
+        
+        audit('deposit_initiated', { phone: normalizedPhone, amount: parsedAmount, ip: req.ip });
         res.json({ msg: 'STK Prompt Sent! Check your phone.' });
     } catch (err) {
         res.status(500).json({ error: 'Deposit failed. Please try again.' });
@@ -644,20 +738,36 @@ app.post('/mpesa/withdraw', withdrawLimiter, async (req, res) => {
     const { phone, amount } = req.body;
     const normalizedPhone = normalizePhone(phone);
     if (!normalizedPhone) return res.status(400).json({ error: 'Invalid phone number.' });
+    
     const parsedAmount = validateAmount(amount);
-    if (!parsedAmount || parsedAmount < 10) return res.status(400).json({ error: 'Minimum withdrawal is KES 10.' });
-    if (process.env.DEMO_MODE === 'true')
+    if (!parsedAmount || parsedAmount < MIN_WITHDRAWAL) {
+        return res.status(400).json({ error: `Minimum withdrawal is KES ${MIN_WITHDRAWAL}.` });
+    }
+    
+    if (process.env.DEMO_MODE === 'true') {
         return res.status(403).json({ error: 'Withdrawals disabled in demo mode.' });
+    }
+    
     const totalDeduct = parsedAmount + WITHDRAW_FEE;
     const deducted = await deductBalance(normalizedPhone, totalDeduct);
-    if (!deducted) return res.status(400).json({ error: `Insufficient balance. Need KES ${totalDeduct}.` });
+    if (!deducted) {
+        return res.status(400).json({ error: `Insufficient balance. Need KES ${totalDeduct}.` });
+    }
+    
     try {
         const payouts = intasend.payouts();
         await payouts.mpesa({
-            currency: 'KES', requires_approval: 'NO',
-            transactions: [{ name: 'Player', account: normalizedPhone, amount: String(parsedAmount), narrative: 'TicTacCash Withdrawal' }]
+            currency: 'KES',
+            requires_approval: 'NO',
+            transactions: [{
+                name: 'Player',
+                account: normalizedPhone,
+                amount: String(parsedAmount),
+                narrative: 'TicTacCash Withdrawal'
+            }]
         });
-        audit('withdrawal_initiated', { phone: normalizedPhone, amount: parsedAmount });
+        
+        audit('withdrawal_initiated', { phone: normalizedPhone, amount: parsedAmount, ip: req.ip });
         res.json({ msg: `Withdrawal of KES ${parsedAmount} initiated.` });
     } catch (err) {
         await creditBalance(normalizedPhone, totalDeduct);
@@ -665,7 +775,9 @@ app.post('/mpesa/withdraw', withdrawLimiter, async (req, res) => {
     }
 });
 
+// ─── ERROR HANDLER ────────────────────────────────────────────────────────
 app.use((err, req, res, next) => {
+    console.error('Server error:', err);
     res.status(500).json({ error: 'Internal server error' });
 });
 
@@ -677,12 +789,30 @@ const checkWinner = (board) => {
     return board.every(Boolean) ? 'DRAW' : null;
 };
 
+// ─── SOCKET.IO SECURITY ───────────────────────────────────────────────────
+io.use((socket, next) => {
+    const token = socket.handshake.auth.token;
+    const ip = socket.handshake.address;
+    
+    // Rate limit connections per IP
+    const connections = Array.from(io.sockets.sockets.values())
+        .filter(s => s.handshake.address === ip).length;
+    
+    if (connections > 5) {
+        return next(new Error('Too many connections from this IP'));
+    }
+    
+    next();
+});
+
 // ─── SOCKET EVENTS ────────────────────────────────────────────────────────
 io.on('connection', (socket) => {
     socket.searching = false;
     socket.currentRoom = null;
     socket.authenticated = false;
-    console.log(`🔌 New connection: ${socket.id}`);
+    socket.ip = socket.handshake.address;
+    
+    console.log(`🔌 New connection: ${socket.id} from ${socket.ip}`);
     broadcastOnlineCount();
 
     socket.on('check_user', async ({ phone }) => {
@@ -705,42 +835,55 @@ io.on('connection', (socket) => {
         
         const exists = await userExists(normalizedPhone);
         if (exists) {
-            return socket.emit('error_msg', 'User already exists. Please login.');
+            audit('register_attempt_existing', { phone: normalizedPhone, ip: socket.ip });
+            return socket.emit('error_msg', 'User already exists.');
+        }
+        
+        // Check for common/weak PINs
+        const weakPins = ['0000', '1111', '2222', '3333', '4444', '5555', '6666', '7777', '8888', '9999', '1234'];
+        if (weakPins.includes(pin)) {
+            return socket.emit('error_msg', 'Please choose a more secure PIN.');
         }
         
         await setUserPin(normalizedPhone, pin);
         await setUserCreatedAt(normalizedPhone);
-        
         await creditBalance(normalizedPhone, DEMO_BONUS);
         await setDemoClaimed(normalizedPhone);
         
-        audit('user_registered', { phone: normalizedPhone });
+        audit('user_registered', { phone: normalizedPhone, ip: socket.ip });
         socket.emit('registration_success', { phone: normalizedPhone });
         console.log(`✅ New user registered: ${normalizedPhone}`);
     });
 
     socket.on('auth', async ({ phone, pin }) => {
-        console.log(`🔐 Auth attempt for phone: ${phone}`);
         const normalizedPhone = normalizePhone(phone);
         if (!normalizedPhone) {
-            console.log(`❌ Invalid phone number: ${phone}`);
             return socket.emit('error_msg', 'Invalid phone number.');
         }
         if (!validatePin(pin)) {
             return socket.emit('error_msg', 'PIN must be 4 digits.');
         }
         
+        // Check login attempts
+        const attemptCheck = checkLoginAttempts(normalizedPhone);
+        if (!attemptCheck.allowed) {
+            audit('auth_blocked', { phone: normalizedPhone, reason: attemptCheck.reason, ip: socket.ip });
+            return socket.emit('error_msg', attemptCheck.reason);
+        }
+        
         const storedPin = await getUserPin(normalizedPhone);
         if (!storedPin) {
-            return socket.emit('error_msg', 'User not found. Please register.');
+            return socket.emit('error_msg', 'User not found.');
         }
         
         const pinValid = await verifyPin(pin, storedPin);
         if (!pinValid) {
-            audit('auth_failed', { phone: normalizedPhone, reason: 'Invalid PIN' });
+            recordFailedLogin(normalizedPhone);
+            audit('auth_failed', { phone: normalizedPhone, ip: socket.ip });
             return socket.emit('error_msg', 'Invalid PIN.');
         }
         
+        resetLoginAttempts(normalizedPhone);
         socket.phone = normalizedPhone;
         socket.authenticated = true;
         socket.join(`phone:${normalizedPhone}`);
@@ -749,15 +892,14 @@ io.on('connection', (socket) => {
         
         if (bal < ENTRY_FEE) {
             await creditBalance(normalizedPhone, DEMO_BONUS);
-            audit('demo_topup', { phone: normalizedPhone });
             socket.emit('demo_bonus', { amount: DEMO_BONUS });
         }
         
         const updatedBal = await getBalance(normalizedPhone);
-        audit('auth_success', { phone: normalizedPhone, balance: updatedBal });
+        audit('auth_success', { phone: normalizedPhone, ip: socket.ip });
         socket.emit('auth_success', { balance: updatedBal.toFixed(2) });
         broadcastOnlineCount();
-        console.log(`✅ Auth success: ${normalizedPhone} - Balance: ${updatedBal}`);
+        console.log(`✅ Auth success: ${normalizedPhone}`);
     });
 
     socket.on('change_pin', async ({ oldPin, newPin }) => {
@@ -775,13 +917,14 @@ io.on('connection', (socket) => {
         }
         
         await setUserPin(socket.phone, newPin);
-        audit('pin_changed', { phone: socket.phone });
+        audit('pin_changed', { phone: socket.phone, ip: socket.ip });
         socket.emit('pin_changed', {});
-        console.log(`🔐 PIN changed for: ${socket.phone}`);
     });
 
     socket.on('create_private_room', async () => {
-        if (!socket.authenticated || !socket.phone) return socket.emit('error_msg', 'Not authenticated.');
+        if (!socket.authenticated || !socket.phone) {
+            return socket.emit('error_msg', 'Not authenticated.');
+        }
         if (socket.searching) return socket.emit('error_msg', 'Already searching.');
         if (socket.currentRoom) return socket.emit('error_msg', 'Already in a room.');
         
@@ -808,34 +951,25 @@ io.on('connection', (socket) => {
         socket.currentRoom = roomCode;
         socket.join(`room:${roomCode}`);
         
-        console.log(`🏠 Private room created: ${roomCode} by ${socket.phone}`);
+        console.log(`🏠 Private room created: ${roomCode}`);
         socket.emit('room_created', { roomCode, balance: newBal.toFixed(2) });
         socket.emit('waiting_for_opponent', { roomCode });
     });
 
     socket.on('join_private_room', async ({ roomCode }) => {
-        if (!socket.authenticated || !socket.phone) return socket.emit('error_msg', 'Not authenticated.');
+        if (!socket.authenticated || !socket.phone) {
+            return socket.emit('error_msg', 'Not authenticated.');
+        }
         if (socket.searching) return socket.emit('error_msg', 'Already searching.');
         if (socket.currentRoom) return socket.emit('error_msg', 'Already in a room.');
         
         const code = roomCode.toUpperCase();
         const room = privateRooms.get(code);
         
-        if (!room) {
-            return socket.emit('room_error', { error: 'Room not found or expired.' });
-        }
-        
-        if (room.gameStarted) {
-            return socket.emit('room_error', { error: 'Game already in progress.' });
-        }
-        
-        if (room.playerSocket) {
-            return socket.emit('room_error', { error: 'Room is full.' });
-        }
-        
-        if (room.creator === socket.phone) {
-            return socket.emit('room_error', { error: 'Cannot join your own room.' });
-        }
+        if (!room) return socket.emit('room_error', { error: 'Room not found.' });
+        if (room.gameStarted) return socket.emit('room_error', { error: 'Game in progress.' });
+        if (room.playerSocket) return socket.emit('room_error', { error: 'Room is full.' });
+        if (room.creator === socket.phone) return socket.emit('room_error', { error: 'Cannot join own room.' });
         
         const deducted = await deductBalance(socket.phone, ENTRY_FEE);
         if (!deducted) {
@@ -864,23 +998,12 @@ io.on('connection', (socket) => {
         };
         games.set(gameId, game);
         
-        console.log(`✅ Player ${socket.phone} joined private room ${code}`);
-        
-        socket.emit('private_match_found', {
-            gameId,
-            mySymbol: 'O',
-            opponent: room.creator
-        });
-        
+        socket.emit('private_match_found', { gameId, mySymbol: 'O', opponent: room.creator });
         if (creatorSocket) {
-            creatorSocket.emit('private_match_found', {
-                gameId,
-                mySymbol: 'X',
-                opponent: socket.phone
-            });
+            creatorSocket.emit('private_match_found', { gameId, mySymbol: 'X', opponent: socket.phone });
         }
         
-        audit('private_game_started', { roomCode: code, playerX: room.creator, playerO: socket.phone });
+        audit('private_game_started', { roomCode: code });
     });
 
     socket.on('cancel_private_room', async () => {
@@ -898,8 +1021,6 @@ io.on('connection', (socket) => {
             const bal = await getBalance(socket.phone);
             socket.emit('balance_update', { balance: bal.toFixed(2) });
             socket.emit('room_cancelled', {});
-            
-            console.log(`❌ Private room ${roomCode} cancelled`);
         }
     });
 
@@ -907,22 +1028,15 @@ io.on('connection', (socket) => {
         if (!socket.authenticated || !socket.phone) {
             return socket.emit('error_msg', 'Not authenticated.');
         }
-        if (socket.searching) {
-            return socket.emit('error_msg', 'Already searching.');
-        }
-        if (socket.currentRoom) {
-            return socket.emit('error_msg', 'Leave current room first.');
-        }
+        if (socket.searching) return socket.emit('error_msg', 'Already searching.');
+        if (socket.currentRoom) return socket.emit('error_msg', 'Leave room first.');
         
         socket.searching = true;
-        audit('find_match', { phone: socket.phone });
         
-        console.log(`🔍 Player ${socket.phone} searching. Current waiting: ${waitingSocket?.phone || 'none'}`);
-
         const deducted = await deductBalance(socket.phone, ENTRY_FEE);
         if (!deducted) {
             socket.searching = false;
-            return socket.emit('error_msg', `Insufficient balance. Need KES ${ENTRY_FEE}.`);
+            return socket.emit('error_msg', `Insufficient balance.`);
         }
 
         const newBal = await getBalance(socket.phone);
@@ -933,7 +1047,7 @@ io.on('connection', (socket) => {
             waitingSocket = null;
 
             opponent.searching = false;
-            socket.searching   = false;
+            socket.searching = false;
 
             const gameId = `game_${crypto.randomUUID()}`;
             socket.join(gameId);
@@ -941,25 +1055,18 @@ io.on('connection', (socket) => {
 
             const game = {
                 board: Array(9).fill(null),
-                players: { X: socket.phone,  O: opponent.phone },
-                sockets: { X: socket.id,     O: opponent.id    },
+                players: { X: socket.phone, O: opponent.phone },
+                sockets: { X: socket.id, O: opponent.id },
                 currentTurn: 'X',
                 isPrivate: false
             };
             games.set(gameId, game);
             
-            console.log(`✅ MATCHED! ${socket.phone} with ${opponent.phone} - Game: ${gameId}`);
-            audit('game_started', { gameId, playerX: socket.phone, playerO: opponent.phone });
-
-            io.to(gameId).emit('match_found', {
-                gameId,
-                playerX: socket.id,
-                playerO: opponent.id,
-            });
+            audit('game_started', { gameId });
+            io.to(gameId).emit('match_found', { gameId, playerX: socket.id, playerO: opponent.id });
             broadcastOnlineCount();
         } else {
             waitingSocket = socket;
-            console.log(`⏳ ${socket.phone} is now waiting for opponent`);
             socket.emit('waiting', {});
             broadcastOnlineCount();
         }
@@ -979,7 +1086,6 @@ io.on('connection', (socket) => {
         const bal = await getBalance(socket.phone);
         socket.emit('balance_update', { balance: bal.toFixed(2) });
         socket.emit('search_cancelled', {});
-        audit('search_cancelled', { phone: socket.phone });
         broadcastOnlineCount();
     });
 
@@ -988,13 +1094,13 @@ io.on('connection', (socket) => {
         if (!game) return socket.emit('error_msg', 'Game not found.');
 
         const mySymbol = game.sockets.X === socket.id ? 'X' : game.sockets.O === socket.id ? 'O' : null;
-        if (!mySymbol)              return socket.emit('error_msg', 'Not in this game.');
+        if (!mySymbol) return socket.emit('error_msg', 'Not in this game.');
         if (game.currentTurn !== mySymbol) return socket.emit('error_msg', 'Not your turn.');
         if (typeof index !== 'number' || index < 0 || index > 8) return socket.emit('error_msg', 'Invalid move.');
-        if (game.board[index])      return socket.emit('error_msg', 'Cell taken.');
+        if (game.board[index]) return socket.emit('error_msg', 'Cell taken.');
 
-        game.board[index]  = mySymbol;
-        game.currentTurn   = mySymbol === 'X' ? 'O' : 'X';
+        game.board[index] = mySymbol;
+        game.currentTurn = mySymbol === 'X' ? 'O' : 'X';
 
         io.to(gameId).emit('move_made', { index, symbol: mySymbol, nextTurn: game.currentTurn });
 
@@ -1003,13 +1109,10 @@ io.on('connection', (socket) => {
     });
 
     socket.on('disconnect', async () => {
-        console.log(`🔌 Disconnect: ${socket.id} (${socket.phone || 'no phone'})`);
-        
         if (socket.currentRoom) {
             const room = privateRooms.get(socket.currentRoom);
             if (room && !room.gameStarted) {
                 privateRooms.delete(socket.currentRoom);
-                console.log(`🧹 Cleaned up private room: ${socket.currentRoom}`);
             }
         }
         
@@ -1025,11 +1128,10 @@ io.on('connection', (socket) => {
 
         for (const [gameId, game] of games.entries()) {
             if (game.sockets.X === socket.id || game.sockets.O === socket.id) {
-                const mySymbol       = game.sockets.X === socket.id ? 'X' : 'O';
-                const oppSymbol      = mySymbol === 'X' ? 'O' : 'X';
-                const oppPhone       = game.players[oppSymbol];
-                const oppSocketId    = game.sockets[oppSymbol];
-                const oppSocket      = io.sockets.sockets.get(oppSocketId);
+                const oppSymbol = game.sockets.X === socket.id ? 'O' : 'X';
+                const oppPhone = game.players[oppSymbol];
+                const oppSocketId = game.sockets[oppSymbol];
+                const oppSocket = io.sockets.sockets.get(oppSocketId);
 
                 const newBal = await creditBalance(oppPhone, WIN_PRIZE);
                 if (oppSocket) {
@@ -1037,22 +1139,17 @@ io.on('connection', (socket) => {
                     oppSocket.currentRoom = null;
                     oppSocket.emit('balance_update', { balance: newBal.toFixed(2) });
                     oppSocket.emit('game_finished', {
-                        result: 'FORFEIT', winner: oppSymbol,
-                        winnerSocketId: oppSocketId, prize: WIN_PRIZE,
+                        result: 'FORFEIT',
+                        winner: oppSymbol,
+                        winnerSocketId: oppSocketId,
+                        prize: WIN_PRIZE
                     });
                 }
-                audit('game_forfeit', { gameId, winner: oppPhone });
                 games.delete(gameId);
                 break;
             }
         }
         broadcastOnlineCount();
-    });
-
-    socket.on('get_balance', async () => {
-        if (!socket.authenticated || !socket.phone) return;
-        const bal = await getBalance(socket.phone);
-        socket.emit('balance_update', { balance: bal.toFixed(2) });
     });
 });
 
@@ -1061,38 +1158,46 @@ async function finishGame(gameId, game, result) {
     
     if (game.isPrivate && game.roomCode) {
         privateRooms.delete(game.roomCode);
-        const sockets = io.sockets.sockets;
-        for (const [id, sock] of sockets) {
-            if (sock.currentRoom === game.roomCode) {
-                sock.currentRoom = null;
-                sock.leave(`room:${game.roomCode}`);
-            }
-        }
     }
     
     if (result === 'DRAW') {
         await Promise.all([
             creditBalance(game.players.X, DRAW_REFUND),
-            creditBalance(game.players.O, DRAW_REFUND),
+            creditBalance(game.players.O, DRAW_REFUND)
         ]);
+        
         const [balX, balO] = await Promise.all([
             getBalance(game.players.X),
-            getBalance(game.players.O),
+            getBalance(game.players.O)
         ]);
+        
         const sX = io.sockets.sockets.get(game.sockets.X);
         const sO = io.sockets.sockets.get(game.sockets.O);
         if (sX) sX.emit('balance_update', { balance: balX.toFixed(2) });
         if (sO) sO.emit('balance_update', { balance: balO.toFixed(2) });
-        audit('game_draw', { gameId });
-        io.to(gameId).emit('game_finished', { result: 'DRAW', winner: null, winnerSocketId: null, refund: DRAW_REFUND });
+        
+        io.to(gameId).emit('game_finished', { 
+            result: 'DRAW', 
+            winner: null, 
+            winnerSocketId: null, 
+            refund: DRAW_REFUND 
+        });
     } else {
-        const winnerPhone    = game.players[result];
+        const winnerPhone = game.players[result];
         const winnerSocketId = game.sockets[result];
         const newBal = await creditBalance(winnerPhone, WIN_PRIZE);
         const winnerSocket = io.sockets.sockets.get(winnerSocketId);
-        if (winnerSocket) winnerSocket.emit('balance_update', { balance: newBal.toFixed(2) });
-        audit('game_won', { gameId, winner: winnerPhone, prize: WIN_PRIZE });
-        io.to(gameId).emit('game_finished', { result: 'WIN', winner: result, winnerSocketId, prize: WIN_PRIZE });
+        
+        if (winnerSocket) {
+            winnerSocket.emit('balance_update', { balance: newBal.toFixed(2) });
+        }
+        
+        io.to(gameId).emit('game_finished', { 
+            result: 'WIN', 
+            winner: result, 
+            winnerSocketId, 
+            prize: WIN_PRIZE 
+        });
     }
     broadcastOnlineCount();
 }
@@ -1102,7 +1207,7 @@ async function start() {
         await redis.connect();
         console.log('✅ Redis connected');
     } catch(e) {
-        console.warn('⚠️ Redis unavailable — using in-memory storage only:', e.message);
+        console.warn('⚠️ Redis unavailable — using in-memory storage');
     }
     const PORT = process.env.PORT || 3000;
     server.listen(PORT, () => console.log(`🚀 TicTac Cash running on port ${PORT}`));

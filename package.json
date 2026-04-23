@@ -1,7 +1,7 @@
 {
   "name": "tictac-cash",
   "version": "1.0.0",
-  "description": "TicTac Cash - Play TicTacToe with real money",
+  "description": "TicTac Cash - Secure TicTacToe Gaming",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -15,10 +15,13 @@
     "intasend-node": "^1.0.0",
     "helmet": "^7.0.0",
     "express-rate-limit": "^6.10.0",
-    "bcryptjs": "^2.4.3"
-  },
-  "devDependencies": {
-    "nodemon": "^3.0.1"
+    "bcryptjs": "^2.4.3",
+    "hpp": "^0.2.3",
+    "xss-clean": "^0.1.4",
+    "express-mongo-sanitize": "^2.2.0",
+    "cookie-parser": "^1.4.6",
+    "express-session": "^1.18.0",
+    "connect-redis": "^7.1.0"
   },
   "engines": {
     "node": ">=18.0.0"
