@@ -1,20 +1,22 @@
 ﻿<!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TicTac Cash</title>
     <script src="/socket.io/socket.io.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
     <style>
-        :root{--green:#00ff88;--green-glow:rgba(0,255,136,0.25);--red:#ff4560;--gold:#ffd700;--bg:#0a0a0a;--surface:#111;--surface2:#1a1a1a;--border:rgba(0,255,136,0.2);--text:#e8e8e8;--muted:#666;--radius:12px}
+        :root{--green:#00ff88;--green-glow:rgba(0,255,136,0.25);--red:#ff4560;--gold:#ffd700;--bg:#0a0a0a;--surface:#111111;--surface2:#1a1a1a;--border:rgba(0,255,136,0.2);--text:#e8e8e8;--muted:#666;--radius:12px}
         *{box-sizing:border-box;margin:0;padding:0}
         body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow-x:hidden}
-        body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(0,255,136,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(0,255,136,0.03) 1px,transparent 1px);background-size:40px 40px;pointer-events:none;z-index:0}
-        .screen{position:relative;z-index:1;width:100%;max-width:480px;padding:16px;display:flex;flex-direction:column;align-items:center;gap:12px}
+        body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(0,255,136,0.03)1px,transparent 1px),linear-gradient(90deg,rgba(0,255,136,0.03)1px,transparent 1px);background-size:40px 40px;pointer-events:none;z-index:0}
+        .screen{position:relative;z-index:1;width:100%;max-width:460px;padding:16px;display:flex;flex-direction:column;align-items:center;gap:12px}
         .hidden{display:none!important}
         .logo{font-family:'Bebas Neue',sans-serif;font-size:3rem;letter-spacing:4px;color:var(--green);text-shadow:0 0 30px var(--green-glow);line-height:1}
         .logo span{color:var(--text)}
         .tagline{font-size:0.65rem;letter-spacing:3px;color:var(--muted);text-transform:uppercase;margin-top:-8px}
+        .demo-banner{width:100%;background:rgba(255,215,0,0.08);border:1px solid rgba(255,215,0,0.3);border-radius:8px;padding:8px 12px;font-size:0.6rem;letter-spacing:1px;color:var(--gold);text-align:center;text-transform:uppercase}
         .card{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px}
         .card-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
         .card-label{font-size:0.6rem;letter-spacing:2px;color:var(--muted);text-transform:uppercase}
@@ -29,10 +31,14 @@
         .btn-primary{background:var(--green);color:#000;box-shadow:0 0 20px var(--green-glow)}
         .btn-outline{background:transparent;color:var(--green);border:1px solid var(--border);font-size:0.85rem;padding:10px}
         .btn-gold{background:var(--gold);color:#000}
+        .btn-red{background:var(--red);color:#fff}
         .btn-danger{background:transparent;color:var(--red);border:1px solid rgba(255,69,96,0.3);font-size:0.8rem;padding:8px;letter-spacing:1px}
         .btn-small{padding:8px 12px;font-size:0.75rem;width:auto}
-        .chip-balance{font-family:'Bebas Neue',sans-serif;font-size:2.2rem;color:var(--gold);text-shadow:0 0 20px rgba(255,215,0,0.3);letter-spacing:2px}
-        .circulation-bar{width:100%;background:var(--surface2);border-radius:8px;padding:8px 12px;display:flex;justify-content:space-between;font-size:0.6rem;color:var(--muted)}
+        .chip-balance{font-family:'Bebas Neue',sans-serif;font-size:2.5rem;color:var(--gold);text-shadow:0 0 20px rgba(255,215,0,0.3);letter-spacing:2px;text-align:center}
+        .chip-stats{display:flex;justify-content:space-between;font-size:0.55rem;color:var(--muted);margin-top:4px}
+        .chip-stats b{color:var(--text)}
+        .action-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+        .action-row .btn{font-size:0.75rem;padding:10px 8px}
         #status{width:100%;padding:10px 16px;border-radius:8px;background:var(--surface);border:1px solid var(--border);font-size:0.7rem;letter-spacing:2px;color:var(--muted);text-align:center;text-transform:uppercase;min-height:40px;display:flex;align-items:center;justify-content:center;transition:all 0.3s}
         #status.active{color:var(--green);border-color:var(--green)}
         #status.warn{color:var(--gold);border-color:rgba(255,215,0,0.3)}
@@ -55,33 +61,33 @@
         .overlay-icon{font-size:3.5rem}.overlay-title{font-family:'Bebas Neue',sans-serif;font-size:1.8rem;letter-spacing:3px}.overlay-sub{font-size:0.65rem;color:var(--muted)}
         .modal{position:fixed;inset:0;background:rgba(0,0,0,0.9);backdrop-filter:blur(8px);z-index:100;display:flex;align-items:center;justify-content:center;padding:16px}
         .modal-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px;width:100%;max-width:380px;display:flex;flex-direction:column;gap:12px}
-        .modal-title{font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:2px;color:var(--green)}
+        .modal-title{font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:2px}
         .modal-note{font-size:0.6rem;color:var(--gold);background:rgba(255,215,0,0.08);border:1px solid rgba(255,215,0,0.2);border-radius:8px;padding:8px 10px;text-align:center}
-        .chip-pkg{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;transition:all 0.2s}
+        .chip-pkg{background:var(--surface2);border:2px solid var(--border);border-radius:10px;padding:12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;transition:all 0.2s}
         .chip-pkg:hover{border-color:var(--gold)}
         .chip-pkg.selected{border-color:var(--green);background:rgba(0,255,136,0.05)}
-        .action-row{display:flex;gap:8px}
-        .action-row .btn{flex:1;font-size:0.8rem;padding:10px}
+        .collapsible-header{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:0.65rem;letter-spacing:1px;color:var(--muted);text-transform:uppercase;width:100%}
+        .collapsible-content{max-height:0;overflow:hidden;transition:max-height 0.3s;width:100%}
+        .collapsible-content.open{max-height:400px;overflow-y:auto}
         .history-item{display:flex;align-items:center;justify-content:space-between;padding:6px 10px;border-bottom:1px solid rgba(255,255,255,0.03);font-size:0.6rem}
         .forgot-link{text-align:center;margin-top:8px}
         .forgot-link a{color:var(--gold);font-size:0.6rem;letter-spacing:1px;cursor:pointer;text-transform:uppercase}
         .forgot-link a:hover{text-decoration:underline}
-        #toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 20px;font-size:0.7rem;z-index:200;transition:transform 0.3s;white-space:nowrap}
-        #toast.show{transform:translateX(-50%) translateY(0)}
+        #toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%)translateY(80px);background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 20px;font-size:0.7rem;letter-spacing:1px;z-index:200;transition:transform 0.3s;white-space:nowrap}
+        #toast.show{transform:translateX(-50%)translateY(0)}
         #toast.success{border-color:var(--green);color:var(--green)}
         #toast.fail{border-color:var(--red);color:var(--red)}
         #toast.warn{border-color:var(--gold);color:var(--gold)}
-        .collapsible-header{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;font-size:0.65rem;letter-spacing:1px;color:var(--muted);text-transform:uppercase}
-        .collapsible-content{max-height:0;overflow:hidden;transition:max-height 0.3s}
-        .collapsible-content.open{max-height:400px;overflow-y:auto}
         ::-webkit-scrollbar{width:3px}::-webkit-scrollbar-track{background:var(--bg)}::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
     </style>
 </head>
 <body>
 
+<!-- LOGIN SCREEN -->
 <div class="screen" id="login-screen">
     <div class="logo">TicTac<span>Cash</span></div>
     <p class="tagline">Play. Win. Cash Out.</p>
+    <div class="demo-banner">🎮 Demo Mode — 1,000 Free Chips</div>
     <div class="card">
         <div id="phone-step">
             <div class="input-group"><label>Phone Number</label><input type="tel" id="phone-input" placeholder="2547XXXXXXXX"></div>
@@ -98,42 +104,47 @@
     </div>
 </div>
 
+<!-- GAME SCREEN -->
 <div class="screen hidden" id="game-screen">
+    <div class="demo-banner">🎮 Demo Mode — Play chips only</div>
+    
+    <!-- Wallet -->
     <div class="card">
         <div class="card-header"><span class="card-label">Chip Balance</span><span id="wallet-phone" style="font-size:0.6rem;color:var(--muted)"></span></div>
         <div class="chip-balance" id="chip-balance">🪙 0</div>
-        <div class="circulation-bar">
-            <span>🔄 Circulation: <b id="circulation-chips">0</b></span>
-            <span>💸 Withdrawn: <b id="withdrawn-chips">0</b></span>
-        </div>
+        <div class="chip-stats"><span>🔄 Circulation: <b id="circulation-chips">0</b></span><span>💸 Withdrawn: <b id="withdrawn-chips">0</b></span></div>
         <br>
         <div class="action-row">
-            <button class="btn btn-outline" style="color:var(--gold);border-color:rgba(255,215,0,0.3)" id="buy-chips-btn">🎰 Buy</button>
+            <button class="btn btn-outline" id="buy-chips-btn" style="color:var(--gold);border-color:rgba(255,215,0,0.3)">🎰 Buy</button>
             <button class="btn btn-outline" id="transfer-btn">💸 Send</button>
-            <button class="btn btn-outline" style="color:var(--red);border-color:rgba(255,69,96,0.3)" id="withdraw-btn">🏦 Cash Out</button>
+            <button class="btn btn-outline" id="withdraw-btn" style="color:var(--red);border-color:rgba(255,69,96,0.3)">🏦 Cash Out</button>
         </div>
     </div>
-
-    <div class="collapsible-header" id="invite-toggle"><span>👥 Invite Friend</span><span>▼</span></div>
+    
+    <!-- Invite -->
+    <div class="collapsible-header" id="invite-toggle"><span>👥 Invite Friend</span><span id="invite-arrow">▼</span></div>
     <div class="collapsible-content" id="invite-content">
         <div style="padding:12px;display:flex;flex-direction:column;gap:10px">
-            <button class="btn btn-primary btn-small" id="create-room-btn">🏠 Create Room — 50 Chips</button>
+            <button class="btn btn-primary btn-small" id="create-room-btn">🏠 Create Room — 50 🪙</button>
             <div style="display:flex;gap:6px"><input type="text" id="room-code-input" style="flex:1;text-transform:uppercase;text-align:center;font-size:1.1rem;letter-spacing:3px" placeholder="CODE" maxlength="6"><button class="btn btn-primary btn-small" id="join-room-btn" style="width:auto">Join</button></div>
             <div id="room-created-view" class="hidden" style="text-align:center">
                 <div style="font-size:0.6rem;color:var(--muted)">Share this code</div>
                 <div id="display-room-code" style="font-family:'Bebas Neue',sans-serif;font-size:2.5rem;color:var(--green);letter-spacing:6px"></div>
                 <div style="display:flex;gap:6px;margin-top:8px"><input type="text" id="invite-link" style="flex:1;font-size:0.6rem;text-align:center" readonly><button class="btn btn-outline btn-small" id="copy-code-btn">📋</button></div>
-                <div style="display:flex;gap:6px;justify-content:center;margin-top:6px"><button class="btn btn-outline btn-small" id="share-whatsapp">📱</button><button class="btn btn-outline btn-small" id="share-sms">💬</button></div>
-                <button class="btn btn-danger btn-small" id="cancel-room-btn" style="margin-top:8px">Cancel</button>
+                <div style="display:flex;gap:6px;justify-content:center;margin-top:6px"><button class="btn btn-outline btn-small" id="share-whatsapp">📱 WhatsApp</button><button class="btn btn-outline btn-small" id="share-sms">💬 SMS</button></div>
+                <div style="margin-top:8px;font-size:0.6rem;color:var(--muted)">Waiting for opponent...</div>
+                <button class="btn btn-danger btn-small" id="cancel-room-btn" style="margin-top:8px">Cancel Room</button>
             </div>
         </div>
     </div>
-
+    
+    <!-- History -->
     <div class="collapsible-header" id="history-toggle"><span>📋 History</span><span id="history-stats">0W 0L 0D</span></div>
     <div class="collapsible-content" id="history-content"><div id="history-list" style="padding:8px"><div style="text-align:center;color:var(--muted);font-size:0.6rem;padding:12px">No games yet</div></div></div>
-
+    
     <div id="status">Ready to play</div>
-
+    
+    <!-- Board -->
     <div class="board-wrap hidden" id="board-wrap">
         <div class="turn-indicators">
             <div class="player-indicator x-side" id="indicator-x"><span class="symbol">X</span><span id="indicator-x-label">YOU</span></div>
@@ -141,26 +152,27 @@
         </div>
         <div class="grid" id="board"></div>
     </div>
-
+    
+    <!-- Online Bar -->
     <div style="width:100%;display:flex;justify-content:space-between;padding:6px 10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:0.55rem;color:var(--muted)">
-        <span>🟢 <span id="online-count">0</span></span><span>🔍 <span id="searching-count">0</span></span>
+        <span>🟢 <span id="online-count">0</span> Online</span><span>🔍 <span id="searching-count">0</span> Searching</span>
     </div>
-
-    <button class="btn btn-primary" id="play-btn">Search Match — 50 🪙</button>
-    <button class="btn btn-danger hidden" id="cancel-btn">✕ Cancel</button>
+    
+    <button class="btn btn-primary" id="play-btn">🔍 Search Match — 50 🪙</button>
+    <button class="btn btn-danger hidden" id="cancel-btn">✕ Cancel Search</button>
     <button class="btn btn-danger" id="logout-btn">Disconnect</button>
 </div>
 
 <!-- BUY CHIPS MODAL -->
 <div class="modal hidden" id="buy-chips-modal"><div class="modal-card">
     <div class="modal-title" style="color:var(--gold)">🎰 Buy Chips</div>
-    <div class="chip-pkg" onclick="selectPkg(100,100,0)"><div><b>100 🪙</b><br><small>KES 100</small></div></div>
+    <div class="chip-pkg" onclick="selectPkg(100,100,0)"><div><b>100 🪙</b><br><small>KES 100</small></div><span>→</span></div>
     <div class="chip-pkg" onclick="selectPkg(550,500,50)" style="border-color:var(--gold)"><div><b>550 🪙</b><br><small>KES 500 +50 FREE</small></div><small style="color:var(--gold)">BEST</small></div>
-    <div class="chip-pkg" onclick="selectPkg(1200,1000,200)"><div><b>1,200 🪙</b><br><small>KES 1,000 +200 FREE</small></div></div>
+    <div class="chip-pkg" onclick="selectPkg(1200,1000,200)"><div><b>1,200 🪙</b><br><small>KES 1,000 +200 FREE</small></div><span>→</span></div>
     <div id="pay-info" class="hidden">
-        <div class="modal-note">📱 Send to: <b>254712345678</b><br>Amount: <b id="mpesa-amt">KES 100</b></div>
-        <input type="text" id="mpesa-code" placeholder="M-Pesa Code" style="text-transform:uppercase;margin-top:8px">
-        <button class="btn btn-gold" id="verify-pay-btn">✅ Verify</button>
+        <div class="modal-note">📱 Send M-Pesa to:<br><b style="font-size:1.2rem">254712345678</b><br>Amount: <b id="mpesa-amt">KES 100</b></div>
+        <input type="text" id="mpesa-code" placeholder="M-Pesa Code (e.g. ABC123)" style="text-transform:uppercase;margin-top:8px">
+        <button class="btn btn-gold" id="verify-pay-btn">✅ Verify Payment</button>
         <div id="verify-status" style="text-align:center;margin-top:6px;display:none"></div>
     </div>
     <button class="btn btn-outline" id="close-chip-modal">Close</button>
@@ -169,21 +181,21 @@
 <!-- TRANSFER MODAL -->
 <div class="modal hidden" id="transfer-modal"><div class="modal-card">
     <div class="modal-title" style="color:var(--gold)">💸 Send Chips</div>
-    <input type="tel" id="transfer-phone" placeholder="Recipient Phone">
-    <input type="number" id="transfer-amount" placeholder="Amount (min 10)" min="10">
+    <input type="tel" id="transfer-phone" placeholder="Recipient Phone (2547XXXXXXXX)">
+    <input type="number" id="transfer-amount" placeholder="Amount (min 10 chips)" min="10">
     <input type="password" id="transfer-pin" class="pin-input" placeholder="PIN" maxlength="4">
     <small style="color:var(--muted);text-align:center">Fee: 2% (min 1 🪙)</small>
-    <button class="btn btn-gold" id="send-transfer-btn">Send</button>
+    <button class="btn btn-gold" id="send-transfer-btn">💸 Send Chips</button>
     <button class="btn btn-outline" id="close-transfer-modal">Cancel</button>
 </div></div>
 
 <!-- WITHDRAW MODAL -->
 <div class="modal hidden" id="withdraw-modal"><div class="modal-card">
     <div class="modal-title" style="color:var(--red)">🏦 Cash Out Chips</div>
-    <div class="modal-note">Convert chips to KES. Min 100 chips. Fee: 5 chips.</div>
-    <input type="number" id="withdraw-chips" placeholder="Chips (min 100)" min="100">
+    <div class="modal-note">Convert chips to KES. Min <b>100 chips</b>. Fee: <b>5 chips</b>.<br>You'll receive KES via M-Pesa after approval.</div>
+    <input type="number" id="withdraw-chips" placeholder="Chips to withdraw (min 100)" min="100">
     <input type="password" id="withdraw-pin" class="pin-input" placeholder="PIN" maxlength="4">
-    <button class="btn btn-primary" id="submit-withdraw-btn" style="background:var(--red)">Withdraw</button>
+    <button class="btn btn-red" id="submit-withdraw-btn">🏦 Request Withdrawal</button>
     <button class="btn btn-outline" id="close-withdraw-modal">Cancel</button>
 </div></div>
 
@@ -216,51 +228,33 @@ const BASE=window.location.origin,$=id=>document.getElementById(id);
 function checkUrl(){const p=new URLSearchParams(location.search).get('room');if(p)pendingRoomJoin=p.toUpperCase()}
 checkUrl();
 
-// ─── TOAST ───
 let tt;function toast(m,t=''){const el=$('toast');el.textContent=m;el.className='show '+t;clearTimeout(tt);tt=setTimeout(()=>el.className='',3000)}
 
-// ─── LOGIN ───
 function showPhone(){$('phone-step').classList.remove('hidden');$('pin-step').classList.add('hidden')}
 function showPin(){$('phone-step').classList.add('hidden');$('pin-step').classList.remove('hidden')}
 function checkUser(){const r=$('phone-input').value.trim();if(!r)return toast('Enter phone','fail');checkedPhone=r;socket.emit('check_user',{phone:r})}
-function submitPin(){const p=$('pin-input').value.trim();if(!p||p.length!==4||!/^\d+$/.test(p))return toast('Enter 4-digit PIN','fail');
-    if(isRegistering){if(p!==$('confirm-pin-input').value.trim())return toast('PINs mismatch','fail');socket.emit('register',{phone:checkedPhone,pin:p})}
-    else socket.emit('auth',{phone:checkedPhone,pin:p})}
+function submitPin(){const p=$('pin-input').value.trim();if(!p||p.length!==4||!/^\d+$/.test(p))return toast('Enter 4-digit PIN','fail');if(isRegistering){if(p!==$('confirm-pin-input').value.trim())return toast('PINs mismatch','fail');socket.emit('register',{phone:checkedPhone,pin:p})}else socket.emit('auth',{phone:checkedPhone,pin:p})}
 
-// ─── PIN RESET ───
 function showReset(){$('reset-pin-modal').classList.remove('hidden');$('reset-phone-input').value=$('phone-input').value||''}
 function hideReset(){$('reset-pin-modal').classList.add('hidden')}
-async function reqReset(){const p=$('reset-phone-input').value.trim();if(!p)return toast('Enter phone','fail');
-    const r=await fetch('/api/reset-pin/request',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone:p})});const d=await r.json();
-    if(r.ok){resetToken=d.token;$('reset-phone-display').textContent=p;if(d.demoCode)$('reset-code-input').value=d.demoCode;$('reset-step-1').classList.add('hidden');$('reset-step-2').classList.remove('hidden')}
-    else toast(d.error,'fail')}
-async function verReset(){const c=$('reset-code-input').value.trim();if(!c||c.length!==6)return toast('Enter 6-digit code','fail');
-    const r=await fetch('/api/reset-pin/verify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:resetToken,code:c})});const d=await r.json();
-    if(r.ok){verifyToken=d.verifyToken;$('reset-step-2').classList.add('hidden');$('reset-step-3').classList.remove('hidden')}else toast(d.error,'fail')}
-async function setNewPin(){const p=$('new-pin-input').value.trim(),cp=$('confirm-new-pin-input').value.trim();if(!p||p.length!==4||p!==cp)return toast('PINs must match','fail');
-    const r=await fetch('/api/reset-pin/set',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:resetToken,verifyToken,newPin:p})});const d=await r.json();
-    if(r.ok){toast('PIN reset!','success');hideReset();showPhone()}else toast(d.error,'fail')}
+async function reqReset(){const p=$('reset-phone-input').value.trim();if(!p)return toast('Enter phone','fail');const r=await fetch('/api/reset-pin/request',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone:p})});const d=await r.json();if(r.ok){resetToken=d.token;$('reset-phone-display').textContent=p;if(d.demoCode)$('reset-code-input').value=d.demoCode;$('reset-step-1').classList.add('hidden');$('reset-step-2').classList.remove('hidden')}else toast(d.error,'fail')}
+async function verReset(){const c=$('reset-code-input').value.trim();if(!c||c.length!==6)return toast('Enter 6-digit code','fail');const r=await fetch('/api/reset-pin/verify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:resetToken,code:c})});const d=await r.json();if(r.ok){verifyToken=d.verifyToken;$('reset-step-2').classList.add('hidden');$('reset-step-3').classList.remove('hidden')}else toast(d.error,'fail')}
+async function setNewPin(){const p=$('new-pin-input').value.trim(),cp=$('confirm-new-pin-input').value.trim();if(!p||p.length!==4||p!==cp)return toast('PINs must match','fail');const r=await fetch('/api/reset-pin/set',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:resetToken,verifyToken,newPin:p})});const d=await r.json();if(r.ok){toast('PIN reset!','success');hideReset();showPhone()}else toast(d.error,'fail')}
 
-// ─── CHIPS ───
 function updChips(b){myChips=b;$('chip-balance').textContent='🪙 '+b;$('chip-balance').style.transform='scale(1.1)';setTimeout(()=>$('chip-balance').style.transform='scale(1)',200)}
-function showBuyChips(){$('buy-chips-modal').classList.remove('hidden');$('pay-info').classList.add('hidden');selectedPkg=null}
+function showBuyChips(){$('buy-chips-modal').classList.remove('hidden');$('pay-info').classList.add('hidden');selectedPkg=null;document.querySelectorAll('.chip-pkg').forEach(c=>c.classList.remove('selected'))}
 function hideBuyChips(){$('buy-chips-modal').classList.add('hidden')}
 function selectPkg(chips,price,bonus){selectedPkg={chips,price,bonus};document.querySelectorAll('.chip-pkg').forEach(c=>c.classList.remove('selected'));event.currentTarget.classList.add('selected');$('pay-info').classList.remove('hidden');$('mpesa-amt').textContent='KES '+price}
-async function verifyPay(){const c=$('mpesa-code').value.trim().toUpperCase();if(!c||!selectedPkg)return toast('Enter M-Pesa code','fail');
-    const s=$('verify-status');s.style.display='block';s.innerHTML='⏳ Verifying...';
-    const r=await fetch('/api/chips/verify-payment',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone:myPhone,mpesaCode:c,chips:selectedPkg.chips,amount:selectedPkg.price,bonus:selectedPkg.bonus})});const d=await r.json();
-    if(r.ok){s.innerHTML='✅ '+d.chips+' chips credited!';updChips(d.newBalance);setTimeout(hideBuyChips,2000)}else s.innerHTML='❌ '+d.error}
+async function verifyPay(){const c=$('mpesa-code').value.trim().toUpperCase();if(!c||!selectedPkg)return toast('Enter M-Pesa code','fail');const s=$('verify-status');s.style.display='block';s.innerHTML='⏳ Verifying...';const r=await fetch('/api/chips/verify-payment',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone:myPhone,mpesaCode:c,chips:selectedPkg.chips,amount:selectedPkg.price,bonus:selectedPkg.bonus})});const d=await r.json();if(r.ok){s.innerHTML='✅ '+d.chips+' chips credited!';updChips(d.newBalance);setTimeout(hideBuyChips,2000)}else s.innerHTML='❌ '+d.error}
 
 function showTransfer(){$('transfer-modal').classList.remove('hidden')}
-function hideTransfer(){$('transfer-modal').classList.add('hidden')}
+function hideTransfer(){$('transfer-modal').classList.add('hidden');$('send-transfer-btn').disabled=false}
 function sendTransfer(){const p=$('transfer-phone').value.trim(),a=parseInt($('transfer-amount').value),pin=$('transfer-pin').value.trim();if(!p||!a||a<10||!pin||pin.length!==4)return toast('Fill all fields','fail');socket.emit('transfer_chips',{recipientPhone:p,amount:a,pin});$('send-transfer-btn').disabled=true}
 
 function showWithdraw(){$('withdraw-modal').classList.remove('hidden')}
 function hideWithdraw(){$('withdraw-modal').classList.add('hidden')}
-function submitWithdraw(){const c=parseInt($('withdraw-chips').value),pin=$('withdraw-pin').value.trim();if(!c||c<100||!pin||pin.length!==4)return toast('Min 100 chips + PIN','fail');
-    fetch('/api/chips/withdraw',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone:myPhone,chips:c,pin})}).then(r=>r.json()).then(d=>{if(d.msg)toast(d.msg,'success');else toast(d.error,'fail');updChips(d.newBalance);hideWithdraw()}).catch(()=>toast('Network error','fail'))}
+function submitWithdraw(){const c=parseInt($('withdraw-chips').value),pin=$('withdraw-pin').value.trim();if(!c||c<100||!pin||pin.length!==4)return toast('Min 100 chips + PIN','fail');fetch('/api/chips/withdraw',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone:myPhone,chips:c,pin})}).then(r=>r.json()).then(d=>{if(d.msg){toast(d.msg,'success');updChips(d.newBalance)}else toast(d.error,'fail');hideWithdraw()}).catch(()=>toast('Network error','fail'))}
 
-// ─── INVITE ───
 function genLink(c){return BASE+'?room='+c}
 function copy(t){navigator.clipboard.writeText(t).then(()=>toast('Copied!','success')).catch(()=>toast('Failed','fail'))}
 function shareWA(t){window.open('https://wa.me/?text='+encodeURIComponent(t),'_blank')}
@@ -268,20 +262,14 @@ function shareSMS(t){window.open('sms:?body='+encodeURIComponent(t),'_blank')}
 function createRoom(){socket.emit('create_private_room')}
 function joinRoom(c){const cd=c||$('room-code-input').value.trim().toUpperCase();if(!cd||cd.length<4)return toast('Enter code','fail');socket.emit('join_private_room',{roomCode:cd})}
 function cancelRoom(){socket.emit('cancel_private_room')}
-function togInvite(){$('invite-content').classList.toggle('open');$('invite-toggle').querySelector('span:last-child').textContent=$('invite-content').classList.contains('open')?'▲':'▼'}
+function togInvite(){$('invite-content').classList.toggle('open');$('invite-arrow').textContent=$('invite-content').classList.contains('open')?'▲':'▼'}
 
-// ─── HISTORY ───
 function loadHist(){try{const s=localStorage.getItem('th');if(s)gameHistory=JSON.parse(s)}catch(e){}updHist()}
 function saveHist(){try{localStorage.setItem('th',JSON.stringify(gameHistory))}catch(e){}updHist()}
 function addHist(r,a){gameHistory.unshift({id:Date.now(),ts:new Date().toISOString(),result:r,amount:a});if(gameHistory.length>50)gameHistory=gameHistory.slice(0,50);saveHist()}
-function updHist(){const w=gameHistory.filter(g=>g.result==='win').length,l=gameHistory.filter(g=>g.result==='loss').length,d=gameHistory.filter(g=>g.result==='draw').length;
-    $('history-stats').textContent=w+'W '+l+'L '+d+'D';
-    if(!gameHistory.length){$('history-list').innerHTML='<div style="text-align:center;color:var(--muted);font-size:0.6rem;padding:12px">No games yet</div>';return}
-    $('history-list').innerHTML=gameHistory.slice(0,10).map(g=>{const t=new Date(g.ts).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});let ic,rc,ac,at;if(g.result==='win'){ic='🏆';rc='result-win';ac='positive';at='+'+g.amount}else if(g.result==='loss'){ic='❌';rc='result-loss';ac='negative';at='-50'}else{ic='🤝';rc='result-draw';ac='';at=g.amount}return`<div class="history-item"><span class="${rc}">${ic} ${g.result.toUpperCase()}</span><span style="color:var(--muted)">${t}</span><span style="color:${g.result==='win'?'var(--green)':g.result==='loss'?'var(--red)':'var(--gold)'}">${at} 🪙</span></div>`}).join('')}
-function togHist(){$('history-content').classList.toggle('open');$('history-toggle').querySelector('span:last-child').textContent=$('history-content').classList.contains('open')?'▲':'▼'}
+function updHist(){const w=gameHistory.filter(g=>g.result==='win').length,l=gameHistory.filter(g=>g.result==='loss').length,d=gameHistory.filter(g=>g.result==='draw').length;$('history-stats').textContent=w+'W '+l+'L '+d+'D';if(!gameHistory.length){$('history-list').innerHTML='<div style="text-align:center;color:var(--muted);font-size:0.6rem;padding:12px">No games yet</div>';return}$('history-list').innerHTML=gameHistory.slice(0,10).map(g=>{const t=new Date(g.ts).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});let ic,rc,at;if(g.result==='win'){ic='🏆';rc='var(--green)';at='+'+g.amount}else if(g.result==='loss'){ic='❌';rc='var(--red)';at='-50'}else{ic='🤝';rc='var(--gold)';at=g.amount}return`<div class="history-item"><span>${ic} ${g.result.toUpperCase()}</span><span style="color:var(--muted)">${t}</span><span style="color:${rc}">${at} 🪙</span></div>`}).join('')}
 function clearHist(){gameHistory=[];saveHist();toast('Cleared','')}
 
-// ─── GAME ───
 function initBoard(){$('board').innerHTML='';for(let i=0;i<9;i++){const c=document.createElement('div');c.className='cell';c.dataset.index=i;c.addEventListener('click',()=>makeMove(i));$('board').appendChild(c)}}
 function makeMove(i){if(!gameActive||currentTurn!==mySymbol||board[i])return;socket.emit('make_move',{gameId,index:i})}
 function applyMove(i,s){board[i]=s;const c=$('board').children[i];c.textContent=s;c.className='cell '+s.toLowerCase();c.classList.remove('clickable')}
@@ -295,15 +283,12 @@ function logout(){socket.disconnect();myPhone=null;gameActive=false;$('game-scre
 function findMatch(){if(!myPhone)return toast('Not auth','fail');$('play-btn').disabled=true;setStatus('Searching...','active',true);socket.emit('find_match')}
 function cancelSearch(){socket.emit('cancel_search')}
 
-// ─── SOCKET ───
 function initSocket(){
     if(socket){socket.removeAllListeners();socket.disconnect()}
     socket=io({transports:['websocket','polling'],reconnection:true,reconnectionAttempts:10,reconnectionDelay:1000});
     socket.on('connect',()=>{if(myPhone&&!authCompleted)socket.emit('auth',{phone:myPhone,pin:sessionStorage.getItem('pin')})});
     socket.on('disconnect',()=>{authCompleted=false;if(gameActive)toast('Connection lost','warn')});
-    socket.on('user_check_result',({exists,phone})=>{isRegistering=!exists;checkedPhone=phone;showPin();
-        if(isRegistering){$('pin-title').textContent='Create PIN';$('pin-label').textContent='Choose PIN';$('confirm-pin-group').classList.remove('hidden');$('submit-pin-btn').textContent='Create Account'}
-        else{$('pin-title').textContent='Welcome back!';$('pin-label').textContent='Your PIN';$('confirm-pin-group').classList.add('hidden');$('submit-pin-btn').textContent='Enter Arena'}});
+    socket.on('user_check_result',({exists,phone})=>{isRegistering=!exists;checkedPhone=phone;showPin();if(isRegistering){$('pin-title').textContent='Create PIN';$('pin-label').textContent='Choose PIN';$('confirm-pin-group').classList.remove('hidden');$('submit-pin-btn').textContent='Create Account'}else{$('pin-title').textContent='Welcome back!';$('pin-label').textContent='Your PIN';$('confirm-pin-group').classList.add('hidden');$('submit-pin-btn').textContent='Enter Arena'}});
     socket.on('registration_success',({phone})=>{myPhone=phone;toast('Account created! Login now.','success');setTimeout(()=>{showPhone();$('phone-input').value=phone},1500)});
     socket.on('auth_success',({chips})=>{authCompleted=true;myPhone=checkedPhone;$('wallet-phone').textContent=myPhone;updChips(chips);$('login-screen').classList.add('hidden');$('game-screen').classList.remove('hidden');setStatus('Ready');loadHist();showPhone();if(pendingRoomJoin){$('room-code-input').value=pendingRoomJoin;setTimeout(()=>{togInvite();joinRoom(pendingRoomJoin);pendingRoomJoin=null},500)}});
     socket.on('balance_update',({chips})=>updChips(chips));
@@ -312,42 +297,31 @@ function initSocket(){
     socket.on('waiting',()=>{setStatus('Searching...','active',true);$('play-btn').classList.add('hidden');$('cancel-btn').classList.remove('hidden')});
     socket.on('search_cancelled',()=>{setStatus('Ready');$('play-btn').disabled=false;$('play-btn').classList.remove('hidden');$('cancel-btn').classList.add('hidden');toast('Cancelled','warn')});
     socket.on('demo_bonus',({chips})=>{updChips(chips);toast('🎉 +'+chips+' chips!','success')});
-    socket.on('match_found',({gameId:gId,playerX,playerO})=>{gameId=gId;mySymbol=socket.id===playerX?'X':'O';currentTurn='X';board=Array(9).fill(null);gameActive=true;
-        if(mySymbol==='X'){$('indicator-x-label').textContent='YOU';$('indicator-o-label').textContent='OPP'}else{$('indicator-x-label').textContent='OPP';$('indicator-o-label').textContent='YOU'}
-        initBoard();$('board-wrap').classList.remove('hidden');$('play-btn').classList.add('hidden');$('cancel-btn').classList.add('hidden');updTurn();toast('Match found!','success')});
-    socket.on('private_match_found',({gameId:gId,mySymbol:s,opponent})=>{gameId=gId;mySymbol=s;currentTurn='X';board=Array(9).fill(null);gameActive=true;
-        $('room-created-view').classList.add('hidden');togInvite();
-        if(mySymbol==='X'){$('indicator-x-label').textContent='YOU';$('indicator-o-label').textContent='OPP'}else{$('indicator-x-label').textContent='OPP';$('indicator-o-label').textContent='YOU'}
-        initBoard();$('board-wrap').classList.remove('hidden');$('play-btn').classList.add('hidden');updTurn();toast('Game starting!','success')});
+    socket.on('match_found',({gameId:gId,playerX,playerO})=>{gameId=gId;mySymbol=socket.id===playerX?'X':'O';currentTurn='X';board=Array(9).fill(null);gameActive=true;if(mySymbol==='X'){$('indicator-x-label').textContent='YOU';$('indicator-o-label').textContent='OPP'}else{$('indicator-x-label').textContent='OPP';$('indicator-o-label').textContent='YOU'}initBoard();$('board-wrap').classList.remove('hidden');$('play-btn').classList.add('hidden');$('cancel-btn').classList.add('hidden');updTurn();toast('Match found!','success')});
+    socket.on('private_match_found',({gameId:gId,mySymbol:s,opponent})=>{gameId=gId;mySymbol=s;currentTurn='X';board=Array(9).fill(null);gameActive=true;$('room-created-view').classList.add('hidden');togInvite();if(mySymbol==='X'){$('indicator-x-label').textContent='YOU';$('indicator-o-label').textContent='OPP'}else{$('indicator-x-label').textContent='OPP';$('indicator-o-label').textContent='YOU'}initBoard();$('board-wrap').classList.remove('hidden');$('play-btn').classList.add('hidden');updTurn();toast('Game starting!','success')});
     socket.on('room_created',({roomCode,chips})=>{currentRoomCode=roomCode;$('room-created-view').classList.remove('hidden');$('display-room-code').textContent=roomCode;$('invite-link').value=genLink(roomCode);updChips(chips);toast('Room: '+roomCode,'success')});
     socket.on('room_error',({error})=>toast(error,'fail'));
     socket.on('room_cancelled',()=>{$('room-created-view').classList.add('hidden');setStatus('Ready');toast('Cancelled','warn')});
     socket.on('move_made',({index,symbol,nextTurn})=>{applyMove(index,symbol);currentTurn=nextTurn;updTurn()});
-    socket.on('game_finished',({result,winner,winnerSocketId,prize,refund})=>{gameActive=false;[...$('board').children].forEach(c=>c.classList.remove('clickable'));
-        if(result==='DRAW'){showResult('🤝','DRAW',refund+' chips refunded');setStatus('Draw','warn');addHist('draw',refund)}
-        else if(result==='FORFEIT'){showResult('🏆','VICTORY',prize+' chips won');setStatus('Victory!','active');addHist('win',prize)}
-        else{const w=socket.id===winnerSocketId;if(w){hlWin(winner);showResult('💰','YOU WIN!',prize+' chips');setStatus('Winner!','active');addHist('win',prize)}else{hlWin(winner);showResult('❌','DEFEAT','Better luck next time');setStatus('Lost','error');addHist('loss',50)}}});
+    socket.on('game_finished',({result,winner,winnerSocketId,prize,refund})=>{gameActive=false;[...$('board').children].forEach(c=>c.classList.remove('clickable'));if(result==='DRAW'){showResult('🤝','DRAW',refund+' chips back');setStatus('Draw','warn');addHist('draw',refund)}else if(result==='FORFEIT'){showResult('🏆','VICTORY',prize+' chips won');setStatus('Victory!','active');addHist('win',prize)}else{const w=socket.id===winnerSocketId;if(w){hlWin(winner);showResult('💰','YOU WIN!','+'+prize+' chips');setStatus('Winner!','active');addHist('win',prize)}else{hlWin(winner);showResult('❌','DEFEAT','Better luck next time');setStatus('Lost','error');addHist('loss',50)}}});
     socket.on('error_msg',m=>{toast(m,'fail');if(!gameActive){$('play-btn').disabled=false;setStatus('Ready')}});
-    socket.on('chips_received',({from,amount})=>{toast('Received '+amount+' chips!','success');updChips(myChips+amount)});
+    socket.on('chips_received',({from,amount})=>{toast('Received '+amount+' chips!','success')});
     socket.on('transfer_complete',({amount,fee,newBalance})=>{updChips(newBalance);toast('Sent '+amount+' chips! Fee: '+fee,'success');$('send-transfer-btn').disabled=false;setTimeout(hideTransfer,1500)});
     socket.on('chips_credited',({chips,newBalance})=>{updChips(newBalance);toast('+'+chips+' chips!','success')});
-    socket.on('withdrawal_complete',({chips})=>{toast('Withdrawal of '+chips+' chips approved!','success')});
-    socket.on('withdrawal_rejected',({chips})=>{toast('Withdrawal rejected. '+chips+' chips refunded.','warn')});
+    socket.on('withdrawal_complete',({chips})=>{toast('Withdrawal approved! KES '+chips+' sent.','success')});
+    socket.on('withdrawal_rejected',({chips})=>{updChips(myChips+chips);toast('Withdrawal rejected. Chips refunded.','warn')});
 }
 
 function bindEvents(){
     $('continue-btn').addEventListener('click',checkUser);$('submit-pin-btn').addEventListener('click',submitPin);$('back-btn').addEventListener('click',showPhone);
-    $('forgot-pin-link').addEventListener('click',showReset);$('close-reset-modal').addEventListener('click',hideReset);
-    $('request-reset-btn').addEventListener('click',reqReset);$('verify-code-btn').addEventListener('click',verReset);$('set-new-pin-btn').addEventListener('click',setNewPin);
-    $('back-to-request-btn').addEventListener('click',()=>{$('reset-step-2').classList.add('hidden');$('reset-step-1').classList.remove('hidden')});
+    $('forgot-pin-link').addEventListener('click',showReset);$('close-reset-modal').addEventListener('click',hideReset);$('request-reset-btn').addEventListener('click',reqReset);$('verify-code-btn').addEventListener('click',verReset);$('set-new-pin-btn').addEventListener('click',setNewPin);$('back-to-request-btn').addEventListener('click',()=>{$('reset-step-2').classList.add('hidden');$('reset-step-1').classList.remove('hidden')});
     $('logout-btn').addEventListener('click',logout);$('play-btn').addEventListener('click',e=>{e.preventDefault();findMatch()});$('cancel-btn').addEventListener('click',cancelSearch);
     $('buy-chips-btn').addEventListener('click',showBuyChips);$('close-chip-modal').addEventListener('click',hideBuyChips);$('verify-pay-btn').addEventListener('click',verifyPay);
     $('transfer-btn').addEventListener('click',showTransfer);$('close-transfer-modal').addEventListener('click',hideTransfer);$('send-transfer-btn').addEventListener('click',sendTransfer);
     $('withdraw-btn').addEventListener('click',showWithdraw);$('close-withdraw-modal').addEventListener('click',hideWithdraw);$('submit-withdraw-btn').addEventListener('click',submitWithdraw);
-    $('history-toggle').addEventListener('click',togHist);$('invite-toggle').addEventListener('click',togInvite);
+    $('history-toggle').addEventListener('click',()=>{$('history-content').classList.toggle('open')});$('invite-toggle').addEventListener('click',togInvite);
     $('create-room-btn').addEventListener('click',createRoom);$('join-room-btn').addEventListener('click',()=>joinRoom());$('cancel-room-btn').addEventListener('click',cancelRoom);
-    $('dismiss-result').addEventListener('click',dismissResult);
-    $('copy-code-btn').addEventListener('click',()=>copy(currentRoomCode));
+    $('dismiss-result').addEventListener('click',dismissResult);$('copy-code-btn').addEventListener('click',()=>copy(currentRoomCode));
     $('share-whatsapp').addEventListener('click',()=>shareWA('Join TicTac Cash! Code: '+currentRoomCode+' - '+genLink(currentRoomCode)));
     $('share-sms').addEventListener('click',()=>shareSMS('TicTac Cash! Code: '+currentRoomCode+' - '+genLink(currentRoomCode)));
     ['pin-input','confirm-pin-input','new-pin-input','confirm-new-pin-input','transfer-pin','withdraw-pin'].forEach(id=>{$(id)?.addEventListener('input',e=>{e.target.value=e.target.value.replace(/\D/g,'').slice(0,4)})});

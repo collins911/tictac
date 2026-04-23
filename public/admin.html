@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TicTac Cash - Admin</title>
+    <style>
+        :root{--green:#00ff88;--red:#ff4560;--gold:#ffd700;--bg:#0a0a0a;--surface:#111111;--surface2:#1a1a1a;--border:rgba(0,255,136,0.2);--text:#e8e8e8;--muted:#666}
+        *{box-sizing:border-box;margin:0;padding:0}
+        body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-height:100vh;padding:20px}
+        .container{max-width:800px;margin:0 auto}
+        h1{color:var(--green);font-size:1.5rem;letter-spacing:3px;margin-bottom:20px;text-align:center}
+        h2{color:var(--gold);font-size:0.9rem;letter-spacing:2px;margin:16px 0 8px}
+        .login-box{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;max-width:400px;margin:100px auto;display:flex;flex-direction:column;gap:12px}
+        .login-box input{padding:12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--green);font-size:1rem;text-align:center}
+        .login-box button{padding:12px;background:var(--green);color:#000;border:none;border-radius:8px;cursor:pointer;font-weight:bold}
+        .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-bottom:16px}
+        .stat-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center}
+        .stat-label{font-size:0.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:2px;margin-bottom:8px}
+        .stat-value{font-size:1.8rem;font-weight:bold;color:var(--green)}
+        .stat-value.gold{color:var(--gold)}
+        .stat-value.red{color:var(--red)}
+        table{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:12px}
+        th{background:var(--surface2);padding:10px;font-size:0.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;text-align:left}
+        td{padding:10px;font-size:0.65rem;border-bottom:1px solid rgba(255,255,255,0.03)}
+        .btn-approve{background:var(--green);color:#000;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:0.6rem;margin-right:4px}
+        .btn-reject{background:var(--red);color:#fff;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:0.6rem}
+        .btn-refresh{background:var(--gold);color:#000;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:0.7rem;margin-bottom:12px}
+        .hidden{display:none}
+        .section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:10px}
+        .empty{text-align:center;color:var(--muted);font-size:0.6rem;padding:20px}
+        #login-section{max-width:400px;margin:100px auto}
+        #dashboard-section{display:none}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Login -->
+        <div id="login-section">
+            <div class="login-box">
+                <h1 style="text-align:center">🔐 Admin Access</h1>
+                <input type="password" id="admin-secret" placeholder="Enter Admin Secret">
+                <button onclick="login()">Access Dashboard</button>
+                <div id="login-error" style="color:var(--red);font-size:0.7rem;text-align:center;display:none"></div>
+            </div>
+        </div>
+        
+        <!-- Dashboard -->
+        <div id="dashboard-section">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+                <h1>🏦 TicTac Cash Admin</h1>
+                <button class="btn-refresh" onclick="loadAll()">🔄 Refresh</button>
+            </div>
+            
+            <div class="stats-grid" id="stats-grid"></div>
+            
+            <div class="section">
+                <h2>Pending Payments (Chip Purchases)</h2>
+                <div id="pending-payments"><div class="empty">Loading...</div></div>
+            </div>
+            
+            <div class="section">
+                <h2>Pending Withdrawals (Cash Outs)</h2>
+                <div id="pending-withdrawals"><div class="empty">Loading...</div></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let adminSecret = '';
+        const BASE = window.location.origin;
+
+        async function login() {
+            const secret = document.getElementById('admin-secret').value.trim();
+            if (!secret) return;
+            
+            const res = await fetch(`${BASE}/admin/count?secret=${secret}`);
+            if (res.ok) {
+                adminSecret = secret;
+                document.getElementById('login-section').style.display = 'none';
+                document.getElementById('dashboard-section').style.display = 'block';
+                loadAll();
+            } else {
+                document.getElementById('login-error').style.display = 'block';
+                document.getElementById('login-error').textContent = 'Invalid secret';
+            }
+        }
+
+        async function loadAll() {
+            await Promise.all([loadStats(), loadPendingPayments(), loadPendingWithdrawals()]);
+        }
+
+        async function loadStats() {
+            const res = await fetch(`${BASE}/admin/stats?secret=${adminSecret}`);
+            const d = await res.json();
+            document.getElementById('stats-grid').innerHTML = `
+                <div class="stat-card"><div class="stat-label">Total Users</div><div class="stat-value">${d.totalUsers}</div></div>
+                <div class="stat-card"><div class="stat-label">Online Players</div><div class="stat-value">${d.onlinePlayers}</div></div>
+                <div class="stat-card"><div class="stat-label">Active Games</div><div class="stat-value">${d.activeGames}</div></div>
+                <div class="stat-card"><div class="stat-label">Chips In Circulation</div><div class="stat-value">🪙 ${d.chipsInCirculation || 0}</div></div>
+                <div class="stat-card"><div class="stat-label">Chips Withdrawn</div><div class="stat-value red">💸 ${d.chipsWithdrawn || 0}</div></div>
+                <div class="stat-card"><div class="stat-label">🏠 House Balance</div><div class="stat-value gold">🪙 ${d.houseBalance || 0}</div></div>
+            `;
+        }
+
+        async function loadPendingPayments() {
+            const res = await fetch(`${BASE}/admin/pending-payments?secret=${adminSecret}`);
+            const d = await res.json();
+            if (!d.pending || !d.pending.length) {
+                document.getElementById('pending-payments').innerHTML = '<div class="empty">No pending payments</div>';
+                return;
+            }
+            document.getElementById('pending-payments').innerHTML = `
+                <table><thead><tr><th>Time</th><th>Phone</th><th>Amount</th><th>Chips</th><th>Code</th><th>Action</th></tr></thead><tbody>
+                ${d.pending.map(p => `
+                    <tr>
+                        <td>${new Date(p.timestamp).toLocaleTimeString()}</td>
+                        <td>${p.phone}</td>
+                        <td>KES ${p.amount}</td>
+                        <td>${p.chips} 🪙</td>
+                        <td style="color:var(--gold)">${p.mpesaCode}</td>
+                        <td>
+                            <button class="btn-approve" onclick="approvePay('${p.mpesaCode}')">✅</button>
+                            <button class="btn-reject" onclick="rejectPay('${p.mpesaCode}')">❌</button>
+                        </td>
+                    </tr>
+                `).join('')}
+                </tbody></table>`;
+        }
+
+        async function loadPendingWithdrawals() {
+            const res = await fetch(`${BASE}/admin/pending-withdrawals?secret=${adminSecret}`);
+            const d = await res.json();
+            if (!d.pending || !d.pending.length) {
+                document.getElementById('pending-withdrawals').innerHTML = '<div class="empty">No pending withdrawals</div>';
+                return;
+            }
+            document.getElementById('pending-withdrawals').innerHTML = `
+                <table><thead><tr><th>Time</th><th>Phone</th><th>Chips</th><th>KES Value</th><th>Fee</th><th>Action</th></tr></thead><tbody>
+                ${d.pending.map(w => `
+                    <tr>
+                        <td>${new Date(w.timestamp).toLocaleTimeString()}</td>
+                        <td>${w.phone}</td>
+                        <td>${w.chips} 🪙</td>
+                        <td style="color:var(--gold)">KES ${w.chips}</td>
+                        <td>${w.fee} 🪙</td>
+                        <td>
+                            <button class="btn-approve" onclick="approveWithdraw('${w.id}')">✅ Pay</button>
+                            <button class="btn-reject" onclick="rejectWithdraw('${w.id}')">❌</button>
+                        </td>
+                    </tr>
+                `).join('')}
+                </tbody></table>`;
+        }
+
+        async function approvePay(code) {
+            await fetch(`${BASE}/admin/verify-payment?secret=${adminSecret}`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ mpesaCode: code, approved: true })
+            });
+            loadAll();
+        }
+
+        async function rejectPay(code) {
+            await fetch(`${BASE}/admin/verify-payment?secret=${adminSecret}`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ mpesaCode: code, approved: false })
+            });
+            loadAll();
+        }
+
+        async function approveWithdraw(id) {
+            await fetch(`${BASE}/admin/process-withdrawal?secret=${adminSecret}`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ withdrawalId: id, approved: true })
+            });
+            loadAll();
+        }
+
+        async function rejectWithdraw(id) {
+            await fetch(`${BASE}/admin/process-withdrawal?secret=${adminSecret}`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ withdrawalId: id, approved: false })
+            });
+            loadAll();
+        }
+
+        // Auto-refresh every 30 seconds
+        if (adminSecret) setInterval(loadAll, 30000);
+    </script>
+</body>
+</html>
