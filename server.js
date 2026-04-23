@@ -94,8 +94,19 @@ app.use(xss());
 app.use(mongoSanitize());
 app.use(hpp());
 
+// ─── SESSION MANAGEMENT ──────────────────────────────────────────────────
+// Initialize session store with Redis
+let sessionStore;
+if (redis.isReady) {
+    sessionStore = new RedisStore({ client: redis });
+    console.log('✅ Redis session store initialized');
+} else {
+    console.warn('⚠️ Redis not ready - falling back to MemoryStore (not for production!)');
+    sessionStore = undefined;
+}
+
 app.use(session({
-    store: redis.isReady ? new RedisStore({ client: redis }) : undefined,
+    store: sessionStore,
     secret: SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
