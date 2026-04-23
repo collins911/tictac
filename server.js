@@ -12,7 +12,6 @@ const bcrypt   = require('bcryptjs');
 const hpp      = require('hpp');
 const xss      = require('xss-clean');
 const mongoSanitize = require('express-mongo-sanitize');
-const csrf     = require('csurf');
 const cookieParser = require('cookie-parser');
 const session  = require('express-session');
 const RedisStore = require('connect-redis').default;
@@ -29,7 +28,7 @@ const io     = new Server(server, {
     pingTimeout: 60000,
     pingInterval: 25000,
     connectTimeout: 45000,
-    maxHttpBufferSize: 1e6 // 1MB
+    maxHttpBufferSize: 1e6
 });
 
 // ─── REDIS ────────────────────────────────────────────────────────────────
@@ -51,15 +50,15 @@ const privateRooms  = new Map();
 const userPins      = new Map();
 const userCreatedAt = new Map();
 const resetTokens   = new Map();
-const failedLogins  = new Map(); // phone -> { count, lockedUntil }
-const ipRequests    = new Map(); // ip -> { count, windowStart }
+const failedLogins  = new Map();
+const ipRequests    = new Map();
 
 // ─── SECURITY CONFIG ──────────────────────────────────────────────────────
 const ADMIN_SECRET = process.env.ADMIN_SECRET || crypto.randomBytes(32).toString('hex');
 const SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex');
 const MAX_LOGIN_ATTEMPTS = 5;
-const LOCKOUT_DURATION = 15 * 60 * 1000; // 15 minutes
-const IP_RATE_LIMIT = 100; // requests per minute
+const LOCKOUT_DURATION = 15 * 60 * 1000;
+const IP_RATE_LIMIT = 100;
 
 // ─── SECURITY MIDDLEWARE ──────────────────────────────────────────────────
 app.use(helmet({
@@ -88,7 +87,6 @@ app.use(helmet({
     xssFilter: true
 }));
 
-// Body parser with size limits
 app.use(express.json({ limit: '100kb' }));
 app.use(express.urlencoded({ extended: true, limit: '100kb' }));
 app.use(cookieParser());
@@ -96,7 +94,6 @@ app.use(xss());
 app.use(mongoSanitize());
 app.use(hpp());
 
-// Session management
 app.use(session({
     store: redis.isReady ? new RedisStore({ client: redis }) : undefined,
     secret: SESSION_SECRET,
@@ -105,7 +102,7 @@ app.use(session({
     cookie: {
         secure: process.env.NODE_ENV === 'production',
         httpOnly: true,
-        maxAge: 24 * 60 * 60 * 1000, // 24 hours
+        maxAge: 24 * 60 * 60 * 1000,
         sameSite: 'strict'
     },
     name: 'tictac_sid'
@@ -264,16 +261,6 @@ const resetLoginAttempts = (phone) => {
     failedLogins.delete(phone);
 };
 
-// ─── INPUT VALIDATION ─────────────────────────────────────────────────────
-const sanitizeInput = (input) => {
-    if (typeof input !== 'string') return input;
-    return input
-        .replace(/[<>]/g, '')
-        .replace(/javascript:/gi, '')
-        .replace(/on\w+=/gi, '')
-        .trim();
-};
-
 // ─── ADMIN AUTH MIDDLEWARE ────────────────────────────────────────────────
 const adminAuth = (req, res, next) => {
     const secret = req.headers['x-admin-secret'] || req.query.secret;
@@ -397,7 +384,6 @@ const broadcastOnlineCount = () => {
 setInterval(() => {
     const now = Date.now();
     
-    // Clean waiting socket
     if (waitingSocket) {
         const stillConnected = io.sockets.sockets.has(waitingSocket.id);
         if (!stillConnected || !waitingSocket.searching) {
@@ -406,28 +392,24 @@ setInterval(() => {
         }
     }
     
-    // Clean private rooms (1 hour)
     for (const [code, room] of privateRooms.entries()) {
         if (now - room.createdAt > 3600000) {
             privateRooms.delete(code);
         }
     }
     
-    // Clean reset tokens (10 minutes)
     for (const [key, value] of resetTokens.entries()) {
         if (value.expires < now) {
             resetTokens.delete(key);
         }
     }
     
-    // Clean failed login attempts
     for (const [phone, record] of failedLogins.entries()) {
         if (record.lockedUntil && record.lockedUntil < now) {
             failedLogins.delete(phone);
         }
     }
     
-    // Clean IP rate limits
     for (const [ip, record] of ipRequests.entries()) {
         if (now - record.windowStart > 60000) {
             ipRequests.delete(ip);
@@ -542,7 +524,7 @@ app.get('/admin/users', adminLimiter, adminAuth, async (req, res) => {
             }
         }
         
-        users.sort((a, b) => b.createdAt?.localeCompare(a.createdAt || '') || 0);
+        users.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
         
         res.json({ total: users.length, users });
     } catch (e) {
@@ -791,10 +773,8 @@ const checkWinner = (board) => {
 
 // ─── SOCKET.IO SECURITY ───────────────────────────────────────────────────
 io.use((socket, next) => {
-    const token = socket.handshake.auth.token;
     const ip = socket.handshake.address;
     
-    // Rate limit connections per IP
     const connections = Array.from(io.sockets.sockets.values())
         .filter(s => s.handshake.address === ip).length;
     
@@ -839,7 +819,6 @@ io.on('connection', (socket) => {
             return socket.emit('error_msg', 'User already exists.');
         }
         
-        // Check for common/weak PINs
         const weakPins = ['0000', '1111', '2222', '3333', '4444', '5555', '6666', '7777', '8888', '9999', '1234'];
         if (weakPins.includes(pin)) {
             return socket.emit('error_msg', 'Please choose a more secure PIN.');
@@ -864,7 +843,6 @@ io.on('connection', (socket) => {
             return socket.emit('error_msg', 'PIN must be 4 digits.');
         }
         
-        // Check login attempts
         const attemptCheck = checkLoginAttempts(normalizedPhone);
         if (!attemptCheck.allowed) {
             audit('auth_blocked', { phone: normalizedPhone, reason: attemptCheck.reason, ip: socket.ip });
