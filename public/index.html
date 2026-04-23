@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -13,77 +13,76 @@
         body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(0,255,136,0.03)1px,transparent 1px),linear-gradient(90deg,rgba(0,255,136,0.03)1px,transparent 1px);background-size:40px 40px;pointer-events:none;z-index:0}
         .screen{position:relative;z-index:1;width:100%;max-width:460px;padding:16px;display:flex;flex-direction:column;align-items:center;gap:12px}
         .hidden{display:none!important}
-        .logo{font-family:'Bebas Neue',sans-serif;font-size:3rem;letter-spacing:4px;color:var(--green);text-shadow:0 0 30px var(--green-glow);line-height:1}
+        .logo{font-family:'Bebas Neue',sans-serif;font-size:2.8rem;letter-spacing:4px;color:var(--green);text-shadow:0 0 30px var(--green-glow);line-height:1}
         .logo span{color:var(--text)}
-        .tagline{font-size:0.65rem;letter-spacing:3px;color:var(--muted);text-transform:uppercase;margin-top:-8px}
+        .tagline{font-size:0.6rem;letter-spacing:3px;color:var(--muted);text-transform:uppercase;margin-top:-6px}
         .demo-banner{width:100%;background:rgba(255,215,0,0.08);border:1px solid rgba(255,215,0,0.3);border-radius:8px;padding:8px 12px;font-size:0.6rem;letter-spacing:1px;color:var(--gold);text-align:center;text-transform:uppercase}
-        .card{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px}
-        .card-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+        .card{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px}
+        .card-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
         .card-label{font-size:0.6rem;letter-spacing:2px;color:var(--muted);text-transform:uppercase}
-        .input-group{display:flex;flex-direction:column;gap:6px;width:100%}
+        .input-group{display:flex;flex-direction:column;gap:5px;width:100%}
         .input-group label{font-size:0.6rem;letter-spacing:2px;color:var(--muted);text-transform:uppercase}
-        input{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;color:var(--green);font-family:'DM Mono',monospace;font-size:0.95rem;width:100%;outline:none;transition:border-color 0.2s,box-shadow 0.2s}
+        input{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:11px;color:var(--green);font-family:'DM Mono',monospace;font-size:0.9rem;width:100%;outline:none;transition:border-color 0.2s}
         input:focus{border-color:var(--green);box-shadow:0 0 0 3px var(--green-glow)}
-        .pin-input{font-size:1.8rem!important;text-align:center;letter-spacing:6px}
-        .btn{width:100%;padding:12px;border:none;border-radius:8px;font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:2px;cursor:pointer;transition:transform 0.15s,box-shadow 0.15s,opacity 0.2s}
-        .btn:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,0.4)}
+        .pin-input{font-size:1.6rem!important;text-align:center;letter-spacing:6px}
+        .btn{width:100%;padding:11px;border:none;border-radius:8px;font-family:'Bebas Neue',sans-serif;font-size:0.95rem;letter-spacing:2px;cursor:pointer;transition:transform 0.15s}
+        .btn:hover:not(:disabled){transform:translateY(-2px)}
         .btn:disabled{opacity:0.4;cursor:not-allowed}
-        .btn-primary{background:var(--green);color:#000;box-shadow:0 0 20px var(--green-glow)}
-        .btn-outline{background:transparent;color:var(--green);border:1px solid var(--border);font-size:0.85rem;padding:10px}
+        .btn-primary{background:var(--green);color:#000}
+        .btn-outline{background:transparent;color:var(--green);border:1px solid var(--border);font-size:0.8rem;padding:9px}
         .btn-gold{background:var(--gold);color:#000}
         .btn-red{background:var(--red);color:#fff}
-        .btn-danger{background:transparent;color:var(--red);border:1px solid rgba(255,69,96,0.3);font-size:0.8rem;padding:8px;letter-spacing:1px}
-        .btn-small{padding:8px 12px;font-size:0.75rem;width:auto}
-        .chip-balance{font-family:'Bebas Neue',sans-serif;font-size:2.5rem;color:var(--gold);text-shadow:0 0 20px rgba(255,215,0,0.3);letter-spacing:2px;text-align:center}
-        .chip-stats{display:flex;justify-content:space-between;font-size:0.55rem;color:var(--muted);margin-top:4px}
+        .btn-danger{background:transparent;color:var(--red);border:1px solid rgba(255,69,96,0.3);font-size:0.75rem;padding:8px}
+        .btn-small{padding:7px 10px;font-size:0.7rem;width:auto}
+        .chip-balance{font-family:'Bebas Neue',sans-serif;font-size:2.2rem;color:var(--gold);text-shadow:0 0 20px rgba(255,215,0,0.3);letter-spacing:2px;text-align:center}
+        .chip-stats{display:flex;justify-content:space-between;font-size:0.5rem;color:var(--muted);margin-top:4px}
         .chip-stats b{color:var(--text)}
-        .action-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
-        .action-row .btn{font-size:0.75rem;padding:10px 8px}
-        #status{width:100%;padding:10px 16px;border-radius:8px;background:var(--surface);border:1px solid var(--border);font-size:0.7rem;letter-spacing:2px;color:var(--muted);text-align:center;text-transform:uppercase;min-height:40px;display:flex;align-items:center;justify-content:center;transition:all 0.3s}
+        .action-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:8px}
+        .action-row .btn{font-size:0.7rem;padding:10px 6px;letter-spacing:1px}
+        #status{width:100%;padding:9px 14px;border-radius:8px;background:var(--surface);border:1px solid var(--border);font-size:0.65rem;letter-spacing:2px;color:var(--muted);text-align:center;text-transform:uppercase;min-height:38px;display:flex;align-items:center;justify-content:center}
         #status.active{color:var(--green);border-color:var(--green)}
         #status.warn{color:var(--gold);border-color:rgba(255,215,0,0.3)}
         #status.error{color:var(--red);border-color:rgba(255,69,96,0.3)}
-        .board-wrap{position:relative;display:flex;flex-direction:column;align-items:center;gap:10px;width:100%}
-        .turn-indicators{width:100%;display:flex;justify-content:space-between}
-        .player-indicator{display:flex;align-items:center;gap:6px;padding:6px 10px;border-radius:6px;border:1px solid transparent;font-size:0.6rem;letter-spacing:1px;color:var(--muted)}
+        .board-wrap{display:flex;flex-direction:column;align-items:center;gap:8px;width:100%}
+        .turn-indicators{width:100%;display:flex;justify-content:space-between;padding:0 4px}
+        .player-indicator{display:flex;align-items:center;gap:5px;padding:5px 8px;border-radius:6px;border:1px solid transparent;font-size:0.55rem;letter-spacing:1px;color:var(--muted)}
         .player-indicator.active-turn{border-color:var(--green);color:var(--green);background:rgba(0,255,136,0.05)}
-        .player-indicator .symbol{font-family:'Bebas Neue',sans-serif;font-size:1.1rem}
+        .player-indicator .symbol{font-family:'Bebas Neue',sans-serif;font-size:1rem}
         .x-side .symbol{color:var(--green)}.o-side .symbol{color:var(--red)}
-        .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;width:100%;max-width:280px}
-        .cell{aspect-ratio:1;background:var(--surface);border:1px solid var(--border);border-radius:10px;font-family:'Bebas Neue',sans-serif;font-size:2.5rem;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all 0.15s;color:var(--text);user-select:none}
+        .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;width:100%;max-width:260px}
+        .cell{aspect-ratio:1;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-family:'Bebas Neue',sans-serif;font-size:2.2rem;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all 0.15s;color:var(--text);user-select:none}
         .cell:hover.clickable{background:var(--surface2);border-color:var(--green);transform:scale(1.03)}
         .cell.x{color:var(--green)}.cell.o{color:var(--red)}
         .cell.win-cell{background:rgba(0,255,136,0.1);border-color:var(--green);animation:pulse 1s infinite}
         .cell.o.win-cell{background:rgba(255,69,96,0.1);border-color:var(--red)}
-        @keyframes pulse{0%,100%{box-shadow:0 0 0 transparent}50%{box-shadow:0 0 15px var(--green-glow)}}
-        .overlay{position:fixed;inset:0;background:rgba(0,0,0,0.9);backdrop-filter:blur(8px);z-index:100;display:flex;align-items:center;justify-content:center;padding:20px}
-        .overlay-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:28px 20px;text-align:center;max-width:320px;width:100%;display:flex;flex-direction:column;gap:14px}
-        .overlay-icon{font-size:3.5rem}.overlay-title{font-family:'Bebas Neue',sans-serif;font-size:1.8rem;letter-spacing:3px}.overlay-sub{font-size:0.65rem;color:var(--muted)}
-        .modal{position:fixed;inset:0;background:rgba(0,0,0,0.9);backdrop-filter:blur(8px);z-index:100;display:flex;align-items:center;justify-content:center;padding:16px}
-        .modal-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px;width:100%;max-width:380px;display:flex;flex-direction:column;gap:12px}
-        .modal-title{font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:2px}
-        .modal-note{font-size:0.6rem;color:var(--gold);background:rgba(255,215,0,0.08);border:1px solid rgba(255,215,0,0.2);border-radius:8px;padding:8px 10px;text-align:center}
-        .chip-pkg{background:var(--surface2);border:2px solid var(--border);border-radius:10px;padding:12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;transition:all 0.2s}
+        @keyframes pulse{0%,100%{box-shadow:0 0 0 transparent}50%{box-shadow:0 0 12px var(--green-glow)}}
+        .overlay{position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:100;display:flex;align-items:center;justify-content:center;padding:20px}
+        .overlay-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:24px 18px;text-align:center;max-width:300px;width:100%;display:flex;flex-direction:column;gap:12px}
+        .overlay-icon{font-size:3rem}.overlay-title{font-family:'Bebas Neue',sans-serif;font-size:1.6rem;letter-spacing:2px}.overlay-sub{font-size:0.6rem;color:var(--muted)}
+        .modal{position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:100;display:flex;align-items:center;justify-content:center;padding:14px}
+        .modal-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px;width:100%;max-width:360px;display:flex;flex-direction:column;gap:10px}
+        .modal-title{font-family:'Bebas Neue',sans-serif;font-size:1.2rem;letter-spacing:2px}
+        .modal-note{font-size:0.55rem;color:var(--gold);background:rgba(255,215,0,0.08);border:1px solid rgba(255,215,0,0.2);border-radius:6px;padding:7px 9px;text-align:center}
+        .chip-pkg{background:var(--surface2);border:2px solid var(--border);border-radius:8px;padding:10px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;transition:all 0.2s}
         .chip-pkg:hover{border-color:var(--gold)}
         .chip-pkg.selected{border-color:var(--green);background:rgba(0,255,136,0.05)}
-        .collapsible-header{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:0.65rem;letter-spacing:1px;color:var(--muted);text-transform:uppercase;width:100%}
+        .collapsible-header{display:flex;justify-content:space-between;align-items:center;padding:9px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:0.6rem;letter-spacing:1px;color:var(--muted);text-transform:uppercase;width:100%}
         .collapsible-content{max-height:0;overflow:hidden;transition:max-height 0.3s;width:100%}
-        .collapsible-content.open{max-height:400px;overflow-y:auto}
-        .history-item{display:flex;align-items:center;justify-content:space-between;padding:6px 10px;border-bottom:1px solid rgba(255,255,255,0.03);font-size:0.6rem}
-        .forgot-link{text-align:center;margin-top:8px}
-        .forgot-link a{color:var(--gold);font-size:0.6rem;letter-spacing:1px;cursor:pointer;text-transform:uppercase}
-        .forgot-link a:hover{text-decoration:underline}
-        #toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%)translateY(80px);background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 20px;font-size:0.7rem;letter-spacing:1px;z-index:200;transition:transform 0.3s;white-space:nowrap}
+        .collapsible-content.open{max-height:350px;overflow-y:auto}
+        .history-item{display:flex;align-items:center;justify-content:space-between;padding:5px 8px;border-bottom:1px solid rgba(255,255,255,0.02);font-size:0.55rem}
+        .forgot-link{text-align:center;margin-top:6px}
+        .forgot-link a{color:var(--gold);font-size:0.55rem;letter-spacing:1px;cursor:pointer;text-transform:uppercase}
+        #toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%)translateY(80px);background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 18px;font-size:0.65rem;letter-spacing:1px;z-index:200;transition:transform 0.3s;white-space:nowrap}
         #toast.show{transform:translateX(-50%)translateY(0)}
         #toast.success{border-color:var(--green);color:var(--green)}
         #toast.fail{border-color:var(--red);color:var(--red)}
         #toast.warn{border-color:var(--gold);color:var(--gold)}
+        .online-bar{width:100%;display:flex;justify-content:space-between;padding:5px 8px;background:var(--surface);border:1px solid var(--border);border-radius:6px;font-size:0.5rem;color:var(--muted)}
         ::-webkit-scrollbar{width:3px}::-webkit-scrollbar-track{background:var(--bg)}::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
     </style>
 </head>
 <body>
 
-<!-- LOGIN SCREEN -->
 <div class="screen" id="login-screen">
     <div class="logo">TicTac<span>Cash</span></div>
     <p class="tagline">Play. Win. Cash Out.</p>
@@ -94,26 +93,23 @@
             <br><button class="btn btn-primary" id="continue-btn">Continue</button>
         </div>
         <div id="pin-step" class="hidden">
-            <div style="text-align:center;font-size:0.75rem;color:var(--muted);margin-bottom:12px" id="pin-title">Enter your PIN</div>
+            <div style="text-align:center;font-size:0.7rem;color:var(--muted);margin-bottom:10px" id="pin-title">Enter your PIN</div>
             <div class="input-group"><label id="pin-label">4-Digit PIN</label><input type="password" id="pin-input" class="pin-input" placeholder="****" maxlength="4"></div>
             <div id="confirm-pin-group" class="input-group hidden"><label>Confirm PIN</label><input type="password" id="confirm-pin-input" class="pin-input" placeholder="****" maxlength="4"></div>
             <br><button class="btn btn-primary" id="submit-pin-btn">Enter Arena</button>
-            <button class="btn btn-outline" id="back-btn" style="margin-top:6px">← Back</button>
+            <button class="btn btn-outline" id="back-btn" style="margin-top:5px">← Back</button>
             <div class="forgot-link"><a id="forgot-pin-link">Forgot PIN?</a></div>
         </div>
     </div>
 </div>
 
-<!-- GAME SCREEN -->
 <div class="screen hidden" id="game-screen">
     <div class="demo-banner">🎮 Demo Mode — Play chips only</div>
     
-    <!-- Wallet -->
     <div class="card">
-        <div class="card-header"><span class="card-label">Chip Balance</span><span id="wallet-phone" style="font-size:0.6rem;color:var(--muted)"></span></div>
+        <div class="card-header"><span class="card-label">Chip Balance</span><span id="wallet-phone" style="font-size:0.55rem;color:var(--muted)"></span></div>
         <div class="chip-balance" id="chip-balance">🪙 0</div>
         <div class="chip-stats"><span>🔄 Circulation: <b id="circulation-chips">0</b></span><span>💸 Withdrawn: <b id="withdrawn-chips">0</b></span></div>
-        <br>
         <div class="action-row">
             <button class="btn btn-outline" id="buy-chips-btn" style="color:var(--gold);border-color:rgba(255,215,0,0.3)">🎰 Buy</button>
             <button class="btn btn-outline" id="transfer-btn">💸 Send</button>
@@ -121,30 +117,27 @@
         </div>
     </div>
     
-    <!-- Invite -->
     <div class="collapsible-header" id="invite-toggle"><span>👥 Invite Friend</span><span id="invite-arrow">▼</span></div>
     <div class="collapsible-content" id="invite-content">
-        <div style="padding:12px;display:flex;flex-direction:column;gap:10px">
+        <div style="padding:10px;display:flex;flex-direction:column;gap:8px">
             <button class="btn btn-primary btn-small" id="create-room-btn">🏠 Create Room — 50 🪙</button>
-            <div style="display:flex;gap:6px"><input type="text" id="room-code-input" style="flex:1;text-transform:uppercase;text-align:center;font-size:1.1rem;letter-spacing:3px" placeholder="CODE" maxlength="6"><button class="btn btn-primary btn-small" id="join-room-btn" style="width:auto">Join</button></div>
+            <div style="display:flex;gap:5px"><input type="text" id="room-code-input" style="flex:1;text-transform:uppercase;text-align:center;font-size:1rem;letter-spacing:3px" placeholder="CODE" maxlength="6"><button class="btn btn-primary btn-small" id="join-room-btn" style="width:auto">Join</button></div>
             <div id="room-created-view" class="hidden" style="text-align:center">
-                <div style="font-size:0.6rem;color:var(--muted)">Share this code</div>
-                <div id="display-room-code" style="font-family:'Bebas Neue',sans-serif;font-size:2.5rem;color:var(--green);letter-spacing:6px"></div>
-                <div style="display:flex;gap:6px;margin-top:8px"><input type="text" id="invite-link" style="flex:1;font-size:0.6rem;text-align:center" readonly><button class="btn btn-outline btn-small" id="copy-code-btn">📋</button></div>
-                <div style="display:flex;gap:6px;justify-content:center;margin-top:6px"><button class="btn btn-outline btn-small" id="share-whatsapp">📱 WhatsApp</button><button class="btn btn-outline btn-small" id="share-sms">💬 SMS</button></div>
-                <div style="margin-top:8px;font-size:0.6rem;color:var(--muted)">Waiting for opponent...</div>
-                <button class="btn btn-danger btn-small" id="cancel-room-btn" style="margin-top:8px">Cancel Room</button>
+                <div style="font-size:0.55rem;color:var(--muted)">Share this code</div>
+                <div id="display-room-code" style="font-family:'Bebas Neue',sans-serif;font-size:2rem;color:var(--green);letter-spacing:5px"></div>
+                <div style="display:flex;gap:5px;margin-top:6px"><input type="text" id="invite-link" style="flex:1;font-size:0.55rem;text-align:center" readonly><button class="btn btn-outline btn-small" id="copy-code-btn">📋</button></div>
+                <div style="display:flex;gap:5px;justify-content:center;margin-top:5px"><button class="btn btn-outline btn-small" id="share-whatsapp">📱 WA</button><button class="btn btn-outline btn-small" id="share-sms">💬 SMS</button></div>
+                <div style="margin-top:6px;font-size:0.55rem;color:var(--muted)">Waiting for opponent...</div>
+                <button class="btn btn-danger btn-small" id="cancel-room-btn" style="margin-top:6px">Cancel Room</button>
             </div>
         </div>
     </div>
     
-    <!-- History -->
-    <div class="collapsible-header" id="history-toggle"><span>📋 History</span><span id="history-stats">0W 0L 0D</span></div>
-    <div class="collapsible-content" id="history-content"><div id="history-list" style="padding:8px"><div style="text-align:center;color:var(--muted);font-size:0.6rem;padding:12px">No games yet</div></div></div>
+    <div class="collapsible-header" id="history-toggle"><span>📋 History</span><span id="history-stats" style="font-size:0.55rem">0W 0L 0D</span></div>
+    <div class="collapsible-content" id="history-content"><div id="history-list" style="padding:6px"><div style="text-align:center;color:var(--muted);font-size:0.55rem;padding:10px">No games yet</div></div></div>
     
     <div id="status">Ready to play</div>
     
-    <!-- Board -->
     <div class="board-wrap hidden" id="board-wrap">
         <div class="turn-indicators">
             <div class="player-indicator x-side" id="indicator-x"><span class="symbol">X</span><span id="indicator-x-label">YOU</span></div>
@@ -153,10 +146,7 @@
         <div class="grid" id="board"></div>
     </div>
     
-    <!-- Online Bar -->
-    <div style="width:100%;display:flex;justify-content:space-between;padding:6px 10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:0.55rem;color:var(--muted)">
-        <span>🟢 <span id="online-count">0</span> Online</span><span>🔍 <span id="searching-count">0</span> Searching</span>
-    </div>
+    <div class="online-bar"><span>🟢 <span id="online-count">0</span> Online</span><span>🔍 <span id="searching-count">0</span> Searching</span></div>
     
     <button class="btn btn-primary" id="play-btn">🔍 Search Match — 50 🪙</button>
     <button class="btn btn-danger hidden" id="cancel-btn">✕ Cancel Search</button>
@@ -170,10 +160,10 @@
     <div class="chip-pkg" onclick="selectPkg(550,500,50)" style="border-color:var(--gold)"><div><b>550 🪙</b><br><small>KES 500 +50 FREE</small></div><small style="color:var(--gold)">BEST</small></div>
     <div class="chip-pkg" onclick="selectPkg(1200,1000,200)"><div><b>1,200 🪙</b><br><small>KES 1,000 +200 FREE</small></div><span>→</span></div>
     <div id="pay-info" class="hidden">
-        <div class="modal-note">📱 Send M-Pesa to:<br><b style="font-size:1.2rem">254712345678</b><br>Amount: <b id="mpesa-amt">KES 100</b></div>
-        <input type="text" id="mpesa-code" placeholder="M-Pesa Code (e.g. ABC123)" style="text-transform:uppercase;margin-top:8px">
+        <div class="modal-note">📱 Send M-Pesa to:<br><b style="font-size:1.1rem">254712345678</b><br>Amount: <b id="mpesa-amt">KES 100</b></div>
+        <input type="text" id="mpesa-code" placeholder="M-Pesa Code (e.g. ABC123)" style="text-transform:uppercase;margin-top:6px">
         <button class="btn btn-gold" id="verify-pay-btn">✅ Verify Payment</button>
-        <div id="verify-status" style="text-align:center;margin-top:6px;display:none"></div>
+        <div id="verify-status" style="text-align:center;margin-top:5px;display:none;font-size:0.6rem"></div>
     </div>
     <button class="btn btn-outline" id="close-chip-modal">Close</button>
 </div></div>
@@ -189,10 +179,10 @@
     <button class="btn btn-outline" id="close-transfer-modal">Cancel</button>
 </div></div>
 
-<!-- WITHDRAW MODAL -->
+<!-- CASH OUT MODAL -->
 <div class="modal hidden" id="withdraw-modal"><div class="modal-card">
     <div class="modal-title" style="color:var(--red)">🏦 Cash Out Chips</div>
-    <div class="modal-note">Convert chips to KES. Min <b>100 chips</b>. Fee: <b>5 chips</b>.<br>You'll receive KES via M-Pesa after approval.</div>
+    <div class="modal-note">Convert chips to KES. Min <b>100 chips</b>. Fee: <b>5 chips</b>.<br>You'll receive KES via M-Pesa after admin approval.</div>
     <input type="number" id="withdraw-chips" placeholder="Chips to withdraw (min 100)" min="100">
     <input type="password" id="withdraw-pin" class="pin-input" placeholder="PIN" maxlength="4">
     <button class="btn btn-red" id="submit-withdraw-btn">🏦 Request Withdrawal</button>
@@ -245,7 +235,7 @@ function updChips(b){myChips=b;$('chip-balance').textContent='🪙 '+b;$('chip-b
 function showBuyChips(){$('buy-chips-modal').classList.remove('hidden');$('pay-info').classList.add('hidden');selectedPkg=null;document.querySelectorAll('.chip-pkg').forEach(c=>c.classList.remove('selected'))}
 function hideBuyChips(){$('buy-chips-modal').classList.add('hidden')}
 function selectPkg(chips,price,bonus){selectedPkg={chips,price,bonus};document.querySelectorAll('.chip-pkg').forEach(c=>c.classList.remove('selected'));event.currentTarget.classList.add('selected');$('pay-info').classList.remove('hidden');$('mpesa-amt').textContent='KES '+price}
-async function verifyPay(){const c=$('mpesa-code').value.trim().toUpperCase();if(!c||!selectedPkg)return toast('Enter M-Pesa code','fail');const s=$('verify-status');s.style.display='block';s.innerHTML='⏳ Verifying...';const r=await fetch('/api/chips/verify-payment',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone:myPhone,mpesaCode:c,chips:selectedPkg.chips,amount:selectedPkg.price,bonus:selectedPkg.bonus})});const d=await r.json();if(r.ok){s.innerHTML='✅ '+d.chips+' chips credited!';updChips(d.newBalance);setTimeout(hideBuyChips,2000)}else s.innerHTML='❌ '+d.error}
+async function verifyPay(){const c=$('mpesa-code').value.trim().toUpperCase();if(!c||!selectedPkg)return toast('Enter M-Pesa code','fail');const s=$('verify-status');s.style.display='block';s.innerHTML='⏳ Verifying...';const r=await fetch('/api/chips/verify-payment',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone:myPhone,mpesaCode:c,chips:selectedPkg.chips,amount:selectedPkg.price,bonus:selectedPkg.bonus})});const d=await r.json();if(r.ok){s.innerHTML='✅ '+d.chips+' chips!';updChips(d.newBalance);setTimeout(hideBuyChips,2000)}else s.innerHTML='❌ '+d.error}
 
 function showTransfer(){$('transfer-modal').classList.remove('hidden')}
 function hideTransfer(){$('transfer-modal').classList.add('hidden');$('send-transfer-btn').disabled=false}
@@ -267,7 +257,7 @@ function togInvite(){$('invite-content').classList.toggle('open');$('invite-arro
 function loadHist(){try{const s=localStorage.getItem('th');if(s)gameHistory=JSON.parse(s)}catch(e){}updHist()}
 function saveHist(){try{localStorage.setItem('th',JSON.stringify(gameHistory))}catch(e){}updHist()}
 function addHist(r,a){gameHistory.unshift({id:Date.now(),ts:new Date().toISOString(),result:r,amount:a});if(gameHistory.length>50)gameHistory=gameHistory.slice(0,50);saveHist()}
-function updHist(){const w=gameHistory.filter(g=>g.result==='win').length,l=gameHistory.filter(g=>g.result==='loss').length,d=gameHistory.filter(g=>g.result==='draw').length;$('history-stats').textContent=w+'W '+l+'L '+d+'D';if(!gameHistory.length){$('history-list').innerHTML='<div style="text-align:center;color:var(--muted);font-size:0.6rem;padding:12px">No games yet</div>';return}$('history-list').innerHTML=gameHistory.slice(0,10).map(g=>{const t=new Date(g.ts).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});let ic,rc,at;if(g.result==='win'){ic='🏆';rc='var(--green)';at='+'+g.amount}else if(g.result==='loss'){ic='❌';rc='var(--red)';at='-50'}else{ic='🤝';rc='var(--gold)';at=g.amount}return`<div class="history-item"><span>${ic} ${g.result.toUpperCase()}</span><span style="color:var(--muted)">${t}</span><span style="color:${rc}">${at} 🪙</span></div>`}).join('')}
+function updHist(){const w=gameHistory.filter(g=>g.result==='win').length,l=gameHistory.filter(g=>g.result==='loss').length,d=gameHistory.filter(g=>g.result==='draw').length;$('history-stats').textContent=w+'W '+l+'L '+d+'D';if(!gameHistory.length){$('history-list').innerHTML='<div style="text-align:center;color:var(--muted);font-size:0.55rem;padding:10px">No games yet</div>';return}$('history-list').innerHTML=gameHistory.slice(0,10).map(g=>{const t=new Date(g.ts).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});let ic,rc,at;if(g.result==='win'){ic='🏆';rc='var(--green)';at='+'+g.amount}else if(g.result==='loss'){ic='❌';rc='var(--red)';at='-50'}else{ic='🤝';rc='var(--gold)';at=g.amount}return`<div class="history-item"><span>${ic} ${g.result.toUpperCase()}</span><span style="color:var(--muted)">${t}</span><span style="color:${rc}">${at} 🪙</span></div>`}).join('')}
 function clearHist(){gameHistory=[];saveHist();toast('Cleared','')}
 
 function initBoard(){$('board').innerHTML='';for(let i=0;i<9;i++){const c=document.createElement('div');c.className='cell';c.dataset.index=i;c.addEventListener('click',()=>makeMove(i));$('board').appendChild(c)}}
